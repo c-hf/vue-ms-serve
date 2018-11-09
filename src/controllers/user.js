@@ -6,7 +6,7 @@ const UserInfo = require('../models/UserInfo');
 const VerificationCode = require('../models/VerificationCode');
 
 const sendEmail = require('../utils/email');
-const signHash = require('../utils/signHash');
+const signHash = require('../utils/hash');
 const getCode = require('../utils/code');
 const APIError = require('../middleware/rest').APIError;
 const jwtSecret = require('../config/index').jwtSecret; // jwt密钥
@@ -26,7 +26,7 @@ let mail = require('../config/index').mail;
 
 // 发送验证码
 const sendCode = async (ctx, next) => {
-	let [reqData = '', msgType, query] = [ctx.request.body, '', {}, null];
+	let [reqData = '', msgType, query] = [ctx.request.body, '', {}];
 	if (!reqData) {
 		throw new APIError('sign: code_unknown_error', `系统未知错误`);
 	}
@@ -175,30 +175,72 @@ const signIn = async (ctx, next) => {
 		throw new APIError('sign: unknown_error', `系统未知错误`);
 	}
 	query[reqData.type] = reqData.id;
-	const userData = await userHelper.findFilterUser(query);
+	// const userData = await userHelper.findFilterUser(query);
+	const userData = await User.aggregate([
+		{
+			$match: query, // 查询条件
+		},
+		{
+			// 左连接
+			$lookup: {
+				from: 'usersInfo', // 关联到 usersInfo 表
+				localField: 'id', // User 表关联的字段
+				foreignField: 'id', // usersInfo 表关联的字段
+				as: 'userInfo', // 分组名
+			},
+		},
+		{
+			$unwind: {
+				path: '$userInfo', // 拆分子数组
+				preserveNullAndEmptyArrays: true, // 空的数组也拆分
+			},
+		},
+	])
+		.then(docs => {
+			if (!docs[0]) {
+				throw new APIError(
+					'sign: account_not_registered',
+					`账号未注册`
+				);
+			}
 
-	if (!userData) {
-		throw new APIError('sign: account_not_registered', `账号未注册`);
-	}
+			const hmacPassWord = signHash.hmacPassWord(
+				docs[0].id,
+				reqData.password
+			);
 
-	const hmacPassWord = signHash.hmacPassWord(userData.id, reqData.password);
+			if (hmacPassWord !== docs[0].password) {
+				throw new APIError('sign: wrong_spassword', `密码错误`);
+			}
 
-	if (hmacPassWord !== userData.password) {
-		throw new APIError('sign: wrong_spassword', `密码错误`);
-	}
-
-	// token
-	const jwToken = getToken({ id: userData.id });
-	ctx.rest({
-		token: jwToken,
-	});
+			// token
+			const jwToken = getToken({ id: docs[0].id });
+			ctx.rest({
+				token: jwToken,
+				emailId: docs[0].email,
+				userInfo: {
+					nickName: docs[0].userInfo.nickName,
+					avatar: docs[0].userInfo.avatar,
+					intro: docs[0].userInfo.intro,
+					sex: docs[0].userInfo.sex,
+					birthday: docs[0].userInfo.birthday,
+					region: docs[0].userInfo.region,
+				},
+			});
+		})
+		.catch(err => {
+			// console.log(err);
+			throw new APIError('sign: database_error', `系统未知错误`);
+		});
 };
 
+// 登出
 const signOut = async (ctx, next) => {
 	const payload = getJWTPayload(ctx.headers.authorization);
 	ctx.rest('ok');
 };
 
+// 获取头像
 const userAvatar = async (ctx, next) => {
 	let [reqData = '', query] = [ctx.request.body, {}];
 	if (!reqData) {
@@ -220,17 +262,17 @@ const userAvatar = async (ctx, next) => {
 		},
 	])
 		.then(docs => {
-			console.log(docs);
 			ctx.rest({
 				avatar: docs[0].userInfo[0].avatar,
 			});
 		})
 		.catch(err => {
-			console.log(err);
+			// console.log(err);
 			throw new APIError('sign: database_error', `系统未知错误`);
 		});
 };
 
+// 获取 user 信息
 const userInfo = async (ctx, next) => {
 	const payload = getJWTPayload(ctx.headers.authorization);
 	const userInfoData = await UserInfo.findOne({ id: payload.id })

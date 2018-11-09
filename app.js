@@ -27,7 +27,7 @@ app.use(
 	cors({
 		origin: '*',
 		exposeHeaders: ['WWW-Authenticate', 'Server-Authorization'],
-		maxAge: 5,
+		maxAge: 600,
 		credentials: true,
 		allowMethods: ['GET', 'POST', 'DELETE'],
 		allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
@@ -65,7 +65,7 @@ app.use((ctx, next) => {
 	});
 });
 
-// add bodyparser middleware:
+// 添加 bodyparser 中间件
 app.use(bodyParser());
 
 // 路由权限控制
@@ -81,10 +81,10 @@ app.use(
 	})
 );
 
-// bind .rest() for ctx:
+// 添加 .rest() 方法到 ctx
 app.use(rest.restify());
 
-// add router middleware:
+// 添加路由中间件
 app.use(controller());
 
 app.listen(3000);

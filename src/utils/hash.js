@@ -14,4 +14,14 @@ module.exports = {
 		hmacPassWord.update(password);
 		return hmacPassWord.digest('hex');
 	},
+
+	hmacDevideId: id => {
+		const hash = crypto.createHash('md5');
+		const currentTime = new Date().getTime().toString();
+
+		hash.update(currentTime);
+		hash.update(id);
+
+		return hash.digest('hex');
+	},
 };
