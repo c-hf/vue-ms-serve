@@ -11,4 +11,5 @@ const Environment = mongoose.model(
 	'environments'
 );
 
+// 环境电器设备
 module.exports = Environment;

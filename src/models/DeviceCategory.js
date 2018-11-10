@@ -14,4 +14,5 @@ const DeviceCategory = mongoose.model(
 	'deviceCategorys'
 );
 
+// 设备分类
 module.exports = DeviceCategory;

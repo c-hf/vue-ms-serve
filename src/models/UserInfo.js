@@ -18,4 +18,5 @@ const userInfoSchema = new Schema({
 // 建立模型
 const UserInfo = mongoose.model('UserInfo', userInfoSchema, 'usersInfo');
 
+// 用户信息表
 module.exports = UserInfo;

@@ -7,4 +7,5 @@ const SensorSchema = new Schema({});
 // 建立模型
 const Sensor = mongoose.model('Sensor', SensorSchema, 'sensors');
 
+// 传感器设备
 module.exports = Sensor;

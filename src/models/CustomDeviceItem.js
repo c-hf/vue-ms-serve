@@ -11,4 +11,5 @@ const deviceSchema = new Schema({
 // 建立模型
 const Device = mongoose.model('Device', deviceSchema, 'devices');
 
+// 自定义设备
 module.exports = Device;

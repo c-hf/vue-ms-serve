@@ -6,23 +6,6 @@ const deviceCategoryItemSchema = new Schema({
 	categoryId: String,
 	categoryItemId: String,
 	name: String,
-	param: [
-		{
-			id: String,
-			name: String,
-			value: String,
-			unit: String,
-		},
-	],
-	attr: [
-		{
-			id: String,
-			name: String,
-			type: String,
-			attr: String,
-			unit: String,
-		},
-	],
 });
 
 // 建立模型
@@ -32,4 +15,5 @@ const DeviceCategoryItem = mongoose.model(
 	'deviceCategoryItems'
 );
 
+// 设备分类项
 module.exports = DeviceCategoryItem;

@@ -13,7 +13,8 @@ const codeSchema = new Schema({
 const VerificationCode = mongoose.model(
 	'VerificationCode',
 	codeSchema,
-	'VerificationCodes'
+	'verificationCodes'
 );
 
+// 验证码表
 module.exports = VerificationCode;
