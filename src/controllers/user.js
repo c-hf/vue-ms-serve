@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const userHelper = require('../database/userHelper');
 const User = require('../models/User');
 const UserInfo = require('../models/UserInfo');
+const UserRole = require('../models/UserRole');
 const VerificationCode = require('../models/VerificationCode');
 
 const sendEmail = require('../utils/email');
@@ -141,7 +142,7 @@ const signUp = async (ctx, next) => {
 	const hmacPassWord = signHash.hmacPassWord(hashId, reqData.password);
 
 	// 存入数据库
-	let [user, userInfo] = [
+	let [user, userInfo, userRole] = [
 		{
 			id: hashId,
 			password: hmacPassWord,
@@ -156,9 +157,16 @@ const signUp = async (ctx, next) => {
 			birthday: '',
 			region: '',
 		},
+		{
+			id: hashId,
+		},
 	];
 	user[reqData.type] = reqData.id;
-	await Promise.all([new User(user).save(), new UserInfo(userInfo).save()])
+	await Promise.all([
+		new User(user).save(),
+		new UserInfo(userInfo).save(),
+		new UserRole(userRole).save(),
+	])
 		.then(() => {
 			ctx.rest('ok');
 		})
@@ -176,7 +184,7 @@ const signIn = async (ctx, next) => {
 	}
 	query[reqData.type] = reqData.id;
 	// const userData = await userHelper.findFilterUser(query);
-	const userData = await User.aggregate([
+	await User.aggregate([
 		{
 			$match: query, // 查询条件
 		},
@@ -196,6 +204,13 @@ const signIn = async (ctx, next) => {
 			},
 		},
 	])
+		.then(docs => {
+			return docs;
+		})
+		.catch(err => {
+			console.log(err);
+			throw new APIError('sign: database_error', `系统未知错误`);
+		})
 		.then(docs => {
 			if (!docs[0]) {
 				throw new APIError(
@@ -227,10 +242,6 @@ const signIn = async (ctx, next) => {
 					region: docs[0].userInfo.region,
 				},
 			});
-		})
-		.catch(err => {
-			// console.log(err);
-			throw new APIError('sign: database_error', `系统未知错误`);
 		});
 };
 
@@ -248,7 +259,7 @@ const userAvatar = async (ctx, next) => {
 	}
 	query[reqData.type] = reqData.id;
 	//
-	const userData = await User.aggregate([
+	await User.aggregate([
 		{
 			$lookup: {
 				from: 'usersInfo',
@@ -262,13 +273,22 @@ const userAvatar = async (ctx, next) => {
 		},
 	])
 		.then(docs => {
+			return docs;
+		})
+		.catch(err => {
+			console.log(err);
+			throw new APIError('sign: database_error', `系统未知错误`);
+		})
+		.then(docs => {
+			if (!docs[0]) {
+				throw new APIError(
+					'sign: account_not_registered',
+					`账号未注册`
+				);
+			}
 			ctx.rest({
 				avatar: docs[0].userInfo[0].avatar,
 			});
-		})
-		.catch(err => {
-			// console.log(err);
-			throw new APIError('sign: database_error', `系统未知错误`);
 		});
 };
 
@@ -287,7 +307,7 @@ const userInfo = async (ctx, next) => {
 			});
 		})
 		.catch(err => {
-			throw new APIError('sign: unknown_error', `系统未知错误`);
+			throw new APIError('sign: database_error', `系统未知错误`);
 		});
 };
 

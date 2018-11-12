@@ -29,7 +29,7 @@ app.use(
 		exposeHeaders: ['WWW-Authenticate', 'Server-Authorization'],
 		maxAge: 600,
 		credentials: true,
-		allowMethods: ['GET', 'POST', 'DELETE'],
+		allowMethods: ['GET', 'POST', 'DELETE', 'PUT'],
 		allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
 	})
 );

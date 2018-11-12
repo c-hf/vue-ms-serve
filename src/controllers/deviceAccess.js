@@ -52,7 +52,7 @@ const setDeviceCategoryItem = async (ctx, next) => {
 	try {
 		new DeviceCategoryItem({
 			categoryId: reqData.categoryId,
-			deviceId: reqData.id,
+			categoryItemId: reqData.categoryItemId,
 			name: reqData.name,
 		}).save();
 		resData = 'ok';
@@ -130,6 +130,105 @@ const setDevice = async (ctx, next) => {
 		throw new APIError('device: database_error', `系统未知错误`);
 	}
 	ctx.rest(resData);
+};
+
+// 更新分类
+const updateDeviceCategory = async (ctx, next) => {
+	let reqData = ctx.request.body;
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_category_unknown_error',
+			`系统未知错误`
+		);
+	}
+	let resData;
+	await DeviceCategoryItem.updateOne(
+		{
+			categoryId: reqData.categoryId,
+		},
+		reqData
+	)
+		.then(docs => {
+			// console.log(docs);
+			resData = 'ok';
+		})
+		.catch(err => {
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+	ctx.rest(resData);
+};
+
+// 更新分类项
+const updateDeviceCategoryItem = async (ctx, next) => {
+	let reqData = ctx.request.body;
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_category_item_unknown_error',
+			`系统未知错误`
+		);
+	}
+	let resData;
+	await DeviceCategoryItem.updateOne(
+		{
+			categoryItemId: reqData.categoryItemId,
+		},
+		reqData
+	)
+		.then(docs => {
+			// console.log(docs);
+			resData = 'ok';
+		})
+		.catch(err => {
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+	ctx.rest(resData);
+};
+
+// 删除分类
+const deleteDeviceCategory = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: delete_device_category_unknown_error',
+			`系统未知错误`
+		);
+	}
+	await Promise.all([
+		DeviceCategory.deleteOne({ categoryId: reqData.id }),
+		DeviceCategoryItem.deleteMany({ categoryId: reqData.id }),
+	])
+		.then(docs => {
+			// console.log(docs);
+			ctx.rest('ok');
+		})
+		.catch(err => {
+			throw new APIError(
+				'device: delete_device_category_failed',
+				'删除失败'
+			);
+		});
+};
+
+// 删除分类项
+const deleteDeviceCategoryItem = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: delete_device_category_item_unknown_error',
+			`系统未知错误`
+		);
+	}
+	await DeviceCategoryItem.deleteOne({ categoryItemId: reqData.id })
+		.then(docs => {
+			// console.log(docs);
+			ctx.rest('ok');
+		})
+		.catch(err => {
+			throw new APIError(
+				'device: delete_device_category_item_failed',
+				'删除失败'
+			);
+		});
 };
 
 // get
@@ -254,6 +353,45 @@ const getDeviceId = async (ctx, next) => {
 	});
 };
 
+// 设备相关项 Id 是否唯一
+const getDeviceUnique = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: get_device_unique_unknown_error',
+			`系统未知错误`
+		);
+	}
+	const model = {
+		category: DeviceCategory,
+		categoryItem: DeviceCategoryItem,
+	};
+
+	const queryId = `${reqData.type}Id`;
+	let query = {};
+	query[queryId] = reqData.id;
+
+	await model[reqData.type]
+		.findOne(query)
+		.catch(err => {
+			throw new APIError('device: database_error', `系统未知错误`);
+		})
+		.then(docs => {
+			if (!docs) {
+				ctx.rest('ok');
+			} else {
+				const name = {
+					category: '分类 ID',
+					categoryItem: '分类设备 ID',
+				};
+				throw new APIError(
+					`device: ${reqData.type}Id_already_exist`,
+					`${name[reqData.type]} 已存在`
+				);
+			}
+		});
+};
+
 module.exports = {
 	// 添加分类
 	'POST /api/device/setDeviceCategory': setDeviceCategory,
@@ -265,6 +403,20 @@ module.exports = {
 	'POST /api/device/setDeviceAttr': setDeviceAttr,
 	// 添加设备
 	'POST /api/device/setDevice': setDevice,
+
+	// 更新分类
+	'PUT /api/device/updateDeviceCategory': updateDeviceCategory,
+	// 更新分类项
+	'PUT /api/device/updateDeviceCategoryItem': updateDeviceCategoryItem,
+	// // 更新设备参数
+	// 'PUT /api/device/updateDeviceParam': updateDeviceParam,
+	// // 更新设备属性
+	// 'PUT /api/device/updateDeviceAttr': updateDeviceAttr,
+
+	// 删除分类
+	'DELETE /api/device/deleteDeviceCategory': deleteDeviceCategory,
+	// 删除分类项
+	'DELETE /api/device/deleteDeviceCategoryItem': deleteDeviceCategoryItem,
 
 	// 获取分类与分类设备信息
 	'GET /api/device/getDeviceCategoryInfo': getDeviceCategoryInfo,
@@ -281,4 +433,7 @@ module.exports = {
 	'GET /api/device/getDeviceInfo/:deviceId': getDeviceInfo,
 	// 获取设备 Id
 	'GET /api/device/getDeviceId': getDeviceId,
+
+	// 设备相关项 Id 是否唯一
+	'GET /api/device/getDeviceUnique': getDeviceUnique,
 };
