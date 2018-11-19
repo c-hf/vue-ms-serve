@@ -8,7 +8,7 @@ const deviceAttrSchema = new Schema({
 		{
 			id: String,
 			name: String,
-			type: String,
+			attrType: String,
 			value: String,
 			unit: String,
 		},
