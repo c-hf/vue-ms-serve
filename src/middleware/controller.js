@@ -2,7 +2,7 @@ const fs = require('fs');
 
 // add url-route in /controllers:
 
-function addMapping(router, mapping) {
+const addMapping = (router, mapping) => {
 	for (let url in mapping) {
 		if (url.startsWith('GET ')) {
 			let path = url.substring(4);
@@ -24,13 +24,13 @@ function addMapping(router, mapping) {
 			console.log(`invalid URL: ${url}`);
 		}
 	}
-}
+};
 
 // 获取 dir 目录的中的文件名
 // 取出文件后缀为 .js 的文件
 // 加载模块
 // 调用 addMapping() 设置路由
-function addControllers(router, dir) {
+const addControllers = (router, dir) => {
 	fs.readdirSync(__dirname + '/' + dir)
 		.filter(f => {
 			return f.endsWith('.js');
@@ -40,7 +40,7 @@ function addControllers(router, dir) {
 			let mapping = require(__dirname + '/' + dir + '/' + f);
 			addMapping(router, mapping);
 		});
-}
+};
 
 module.exports = dir => {
 	let controllers_dir = dir || '../controllers',

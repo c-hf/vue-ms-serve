@@ -1,5 +1,5 @@
 module.exports = {
-	APIError: function(code, message) {
+	APIError: (code, message) => {
 		this.code = code || 'internal:unknown_error';
 		this.message = message || '系统未知错误';
 	},

@@ -1,9 +1,9 @@
-const mongoose = require('../middleware/db');
+const mongoose = require('../middleware/mongoose').mongoose;
 const Schema = mongoose.Schema;
 
 // 定义schema
 const deviceSchema = new Schema({
-	id: String,
+	userId: String,
 	deviceId: String,
 	name: String,
 });

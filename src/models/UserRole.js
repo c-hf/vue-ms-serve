@@ -1,16 +1,16 @@
-const mongoose = require('../middleware/db');
+const mongoose = require('../middleware/mongoose').mongoose;
 const Schema = mongoose.Schema;
 
 // 定义schema
 const userRoleSchema = new Schema({
-	id: String,
+	userId: String,
 	roelId: {
 		type: String,
-		default: 'user',
+		default: 'admin',
 	},
 	roleName: {
 		type: String,
-		default: '用户',
+		default: '管理员',
 	},
 });
 

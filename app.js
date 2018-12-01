@@ -4,14 +4,17 @@ const cors = require('koa2-cors'); // cors 跨域
 const jwtKoa = require('koa-jwt'); // koa-jwt
 const logger = require('koa-logger'); // log
 const static = require('koa-static'); // 静态资源服务
-// const path = require('path');
 
 // controller
 const controller = require('./src/middleware/controller');
 // REST API
 const rest = require('./src/middleware/rest');
-// db
-const db = require('./src/middleware/db');
+// mongoose
+const mongoose = require('./src/middleware/mongoose');
+// mqtt
+const mqtt = require('./src/middleware/mqtt');
+// wss
+const wss = require('./src/middleware/websocketServer');
 /* jwt密钥 */
 const jwtSecret = require('./src/config/index').jwtSecret;
 // 静态资源的路径
@@ -65,7 +68,7 @@ app.use((ctx, next) => {
 	});
 });
 
-// 添加 bodyparser 中间件
+// bodyparser 中间件
 app.use(bodyParser());
 
 // 路由权限控制
@@ -76,7 +79,7 @@ app.use(
 			/^\/api\/user\/sendCode/,
 			/^\/api\/user\/signUp/,
 			/^\/api\/user\/signIn/,
-			/^\/api\/user\/userAvatar/,
+			/^\/api\/user\/getUserAvatar/,
 		],
 	})
 );
@@ -84,9 +87,17 @@ app.use(
 // 添加 .rest() 方法到 ctx
 app.use(rest.restify());
 
-// 添加路由中间件
+// 路由中间件
 app.use(controller());
 
-app.listen(3000);
+// mongoose 初始化
+mongoose.init();
 
-console.log('app started at port 3000...');
+// mqtt Server
+mqtt.server();
+
+// koaServer
+const server = app.listen(3000);
+
+// wss
+wss.init(server);

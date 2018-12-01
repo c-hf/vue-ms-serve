@@ -1,6 +1,3 @@
-const jwt = require('jsonwebtoken');
-
-const userHelper = require('../database/userHelper');
 const User = require('../models/User');
 const UserInfo = require('../models/UserInfo');
 const UserRole = require('../models/UserRole');
@@ -10,21 +7,13 @@ const sendEmail = require('../utils/email');
 const signHash = require('../utils/hash');
 const getCode = require('../utils/code');
 const APIError = require('../middleware/rest').APIError;
-const jwtSecret = require('../config/index').jwtSecret; // jwt密钥
-
-// token 期限 1 小时
-const getToken = (content = {}) => {
-	return jwt.sign(content, jwtSecret, { expiresIn: 60 * 60 * 1 });
-};
-
-// 解析JWT
-function getJWTPayload(token) {
-	return jwt.verify(token.split(' ')[1], jwtSecret);
-}
+const jsonWebToken = require('../utils/jsonWebToken');
+const getId = require('../utils/getId');
 
 // 邮件配置
 let mail = require('../config/index').mail;
 
+// post
 // 发送验证码
 const sendCode = async (ctx, next) => {
 	let [reqData = '', msgType, query] = [ctx.request.body, '', {}];
@@ -33,14 +22,17 @@ const sendCode = async (ctx, next) => {
 	}
 	query[reqData.type] = reqData.id;
 
-	const userData = await userHelper.findFilterUser(query);
-	if (userData) {
-		reqData.type === 'phone' ? (msgType = '手机号') : (msgType = '邮箱');
-		throw new APIError(
-			`sign: ${reqData.type}_already_exists`,
-			`${msgType}已被注册`
-		);
-	}
+	await User.findOne(query).then(docs => {
+		if (docs) {
+			reqData.type === 'phone'
+				? (msgType = '手机号')
+				: (msgType = '邮箱');
+			throw new APIError(
+				`sign: ${reqData.type}_already_exists`,
+				`${msgType}已被注册`
+			);
+		}
+	});
 
 	// 时间
 	const date = new Date();
@@ -67,28 +59,36 @@ const sendCode = async (ctx, next) => {
 	    <p>CHFeng</p>
 	    <p style="height: 30px;line-height: 30px;">${currentDate}</p>`;
 
-	await sendEmail(mail).then(info => {
-		if (info.response.startsWith('2') || info.response.startsWith('3')) {
-			const codeData = userHelper.findFilterVerificationCode({
-				id: reqData.id,
-			});
-			if (codeData) {
-				userHelper.deleteCode({ id: reqData.id });
-			}
-			try {
-				new VerificationCode({
+	await sendEmail(mail)
+		.then(info => {
+			if (
+				info.response.startsWith('2') ||
+				info.response.startsWith('3')
+			) {
+				VerificationCode.findOne({
 					id: reqData.id,
-					code: userCode,
-					date: currentTime,
-					validTime: 300000,
-				}).save();
-			} catch (error) {
-				console.log(err);
-				throw new APIError('sign: mail_unknown_error', `系统未知错误`);
+				});
 			}
+		})
+		.then(docs => {
+			// console.log(docs);
+			if (docs) {
+				VerificationCode.deleteOne({ id: reqData.id });
+			}
+			new VerificationCode({
+				id: reqData.id,
+				code: userCode,
+				date: currentTime,
+				validTime: 300000,
+			}).save();
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError('sign: mail_unknown_error', `系统未知错误`);
+		})
+		.then(() => {
 			ctx.rest('ok');
-		}
-	});
+		});
 };
 
 // 注册
@@ -104,61 +104,71 @@ const signUp = async (ctx, next) => {
 	}
 
 	query[reqData.type] = reqData.id;
-	const userData = await userHelper.findFilterUser(query);
-	// console.log(`User: ${userData}`);
-	if (userData) {
-		userData = null;
-		reqData.type === 'phone' ? (msgType = '手机号') : (msgType = '邮箱');
-		throw new APIError('sign: user_already_exists', `${msgType}已被注册`);
-	}
 
-	const codeData = await userHelper.findFilterVerificationCode({
-		id: reqData.id,
-	});
-	// console.log(`Code: ${codeData}`);
-	if (!codeData) {
-		throw new APIError(
-			'sign: verification_code_has_expired',
-			`验证码已失效`
-		);
-	} else {
-		if (date - codeData.date > codeData.validTime) {
+	await User.findOne(query).then(docs => {
+		if (docs) {
+			reqData.type === 'phone'
+				? (msgType = '手机号')
+				: (msgType = '邮箱');
 			throw new APIError(
-				'sign: verification_code_has_expired',
-				`验证码已过期`
-			);
-		} else if (reqData.code !== codeData.code) {
-			throw new APIError(
-				'sign: verification_code_is_wrong',
-				`验证码错误`
+				'sign: user_already_exists',
+				`${msgType}已被注册`
 			);
 		}
-		await userHelper.deleteCode({ id: reqData.id });
-	}
+	});
+
+	await VerificationCode.findOne({
+		id: reqData.id,
+	})
+		.then(docs => {
+			if (!docs) {
+				throw new APIError(
+					'sign: verification_code_has_expired',
+					`验证码已失效`
+				);
+			} else {
+				if (date - docs.date > docs.validTime) {
+					throw new APIError(
+						'sign: verification_code_has_expired',
+						`验证码已过期`
+					);
+				} else if (reqData.code !== docs.code) {
+					throw new APIError(
+						'sign: verification_code_is_wrong',
+						`验证码错误`
+					);
+				}
+			}
+		})
+		.then(
+			VerificationCode.deleteOne({
+				id: reqData.id,
+			})
+		);
 
 	// id
-	const hashId = signHash.hashId(reqData.id);
+	const userId = getId(10);
 	// hmac密钥
-	const hmacPassWord = signHash.hmacPassWord(hashId, reqData.password);
+	const hmacPassWord = signHash.hmacPassWord(userId, reqData.password);
 
 	// 存入数据库
 	let [user, userInfo, userRole] = [
 		{
-			id: hashId,
+			userId: userId,
 			password: hmacPassWord,
 			email: '',
 			phone: '',
 		},
 		{
-			id: hashId,
+			userId: userId,
+			groupId: '',
 			nickName: reqData.nickName,
 			intro: '',
-			sex: '',
 			birthday: '',
 			region: '',
 		},
 		{
-			id: hashId,
+			userId: userId,
 		},
 	];
 	user[reqData.type] = reqData.id;
@@ -183,27 +193,7 @@ const signIn = async (ctx, next) => {
 		throw new APIError('sign: unknown_error', `系统未知错误`);
 	}
 	query[reqData.type] = reqData.id;
-	// const userData = await userHelper.findFilterUser(query);
-	await User.aggregate([
-		{
-			$match: query, // 查询条件
-		},
-		{
-			// 左连接
-			$lookup: {
-				from: 'usersInfo', // 关联到 usersInfo 表
-				localField: 'id', // User 表关联的字段
-				foreignField: 'id', // usersInfo 表关联的字段
-				as: 'userInfo', // 分组名
-			},
-		},
-		{
-			$unwind: {
-				path: '$userInfo', // 拆分子数组
-				preserveNullAndEmptyArrays: true, // 空的数组也拆分
-			},
-		},
-	])
+	await UserFind(query)
 		.then(docs => {
 			return docs;
 		})
@@ -220,7 +210,7 @@ const signIn = async (ctx, next) => {
 			}
 
 			const hmacPassWord = signHash.hmacPassWord(
-				docs[0].id,
+				docs[0].userId,
 				reqData.password
 			);
 
@@ -229,11 +219,15 @@ const signIn = async (ctx, next) => {
 			}
 
 			// token
-			const jwToken = getToken({ id: docs[0].id });
+			const jwToken = jsonWebToken.getToken({
+				userId: docs[0].userId,
+				groupId: docs[0].userInfo.groupId,
+			});
 			ctx.rest({
 				token: jwToken,
 				emailId: docs[0].email,
 				userInfo: {
+					groupId: docs[0].userInfo.groupId,
 					nickName: docs[0].userInfo.nickName,
 					avatar: docs[0].userInfo.avatar,
 					intro: docs[0].userInfo.intro,
@@ -245,26 +239,27 @@ const signIn = async (ctx, next) => {
 		});
 };
 
+// get
 // 登出
 const signOut = async (ctx, next) => {
-	const payload = getJWTPayload(ctx.headers.authorization);
+	const payload = jsonWebToken.getJWTPayload(ctx.headers.authorization);
 	ctx.rest('ok');
 };
 
 // 获取头像
-const userAvatar = async (ctx, next) => {
-	let [reqData = '', query] = [ctx.request.body, {}];
+const getUserAvatar = async (ctx, next) => {
+	let [reqData = '', query] = [ctx.request.query, {}];
 	if (!reqData) {
 		throw new APIError('sign: unknown_error', `系统未知错误`);
 	}
 	query[reqData.type] = reqData.id;
-	//
+
 	await User.aggregate([
 		{
 			$lookup: {
 				from: 'usersInfo',
-				localField: 'id',
-				foreignField: 'id',
+				localField: 'userId',
+				foreignField: 'userId',
 				as: 'userInfo',
 			},
 		},
@@ -272,13 +267,6 @@ const userAvatar = async (ctx, next) => {
 			$match: query,
 		},
 	])
-		.then(docs => {
-			return docs;
-		})
-		.catch(err => {
-			console.log(err);
-			throw new APIError('sign: database_error', `系统未知错误`);
-		})
 		.then(docs => {
 			if (!docs[0]) {
 				throw new APIError(
@@ -289,15 +277,23 @@ const userAvatar = async (ctx, next) => {
 			ctx.rest({
 				avatar: docs[0].userInfo[0].avatar,
 			});
+		})
+		.catch(err => {
+			console.log(err);
+			throw new APIError('sign: database_error', `系统未知错误`);
 		});
 };
 
-// 获取 user 信息
-const userInfo = async (ctx, next) => {
-	const payload = getJWTPayload(ctx.headers.authorization);
-	const userInfoData = await UserInfo.findOne({ id: payload.id })
+// 获取 user info
+const getUserInfo = async (ctx, next) => {
+	const payload = jsonWebToken.getJWTPayload(ctx.headers.authorization);
+	if (!payload) {
+		throw new APIError('user: get_user_info_unknown_error', `系统未知错误`);
+	}
+	await UserInfo.findOne({ userId: payload.userId })
 		.then(docs => {
 			ctx.rest({
+				groupId: docs.groupId,
 				nickName: docs.nickName,
 				avatar: docs.avatar,
 				intro: docs.intro,
@@ -306,22 +302,74 @@ const userInfo = async (ctx, next) => {
 				region: docs.region,
 			});
 		})
-		.catch(err => {
-			throw new APIError('sign: database_error', `系统未知错误`);
+		.catch(error => {
+			console.log(error);
+			throw new APIError('user: database_error', `系统未知错误`);
 		});
+};
+
+// 查找 user
+const getUserById = async (ctx, next) => {
+	const [reqData, query] = [ctx.request.query, {}];
+	if (!reqData) {
+		throw new APIError('user: get_user_unknown_error', `系统未知错误`);
+	}
+	query[reqData.type] = reqData.id;
+	await UserFind(query)
+		.then(docs => {
+			// console.log(docs);
+			ctx.rest({
+				userId: docs[0].userId,
+				nickName: docs[0].userInfo.nickName,
+				avatar: docs[0].userInfo.avatar,
+				intro: docs[0].userInfo.intro,
+				sex: docs[0].userInfo.sex,
+			});
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError('user: database_error', `系统未知错误`);
+		});
+};
+
+// 用户查询
+const UserFind = query => {
+	return User.aggregate([
+		{
+			$match: query, // 查询条件
+		},
+		{
+			// 左连接
+			$lookup: {
+				from: 'usersInfo', // 关联到 usersInfo 表
+				localField: 'userId', // User 表关联的字段
+				foreignField: 'userId', // usersInfo 表关联的字段
+				as: 'userInfo', // 分组名
+			},
+		},
+		{
+			$unwind: {
+				path: '$userInfo', // 拆分子数组
+				preserveNullAndEmptyArrays: true, // 空的数组也拆分
+			},
+		},
+	]);
 };
 
 module.exports = {
 	// 验证码
 	'POST /api/user/sendCode': sendCode,
 	// 头像
-	'POST /api/user/userAvatar': userAvatar,
+	'GET /api/user/getUserAvatar': getUserAvatar,
 	// 注册
 	'POST /api/user/signUp': signUp,
 	// 登录
 	'POST /api/user/signIn': signIn,
+
 	// 登出
 	'GET /api/user/signOut': signOut,
-	// 信息
-	'GET /api/user/userInfo': userInfo,
+	// 获取 user info
+	'GET /api/user/getUserInfo': getUserInfo,
+	// 查找 user
+	'GET /api/user/getUserById': getUserById,
 };

@@ -1,18 +1,16 @@
-const mongoose = require('../middleware/db');
+const mongoose = require('../middleware/mongoose').mongoose;
 const Schema = mongoose.Schema;
 
 // 定义schema
 const DeviceStatusSchema = new Schema(
 	{
-		DeviceId: String,
+		// groupId: String, // 分组 Id
+		deviceId: String, // 设备 Id
 		onLine: Boolean,
 		attr: [
 			{
 				id: String,
-				name: String,
-				type: String,
 				value: String,
-				unit: String,
 			},
 		],
 		createTime: {
