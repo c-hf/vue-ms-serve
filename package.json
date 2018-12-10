@@ -1,28 +1,28 @@
 {
-  "name": "project-serve",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node app.js"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "jsonwebtoken": "^8.3.0",
-    "koa": "^2.6.1",
-    "koa-bodyparser": "^4.2.1",
-    "koa-jwt": "^3.5.1",
-    "koa-logger": "^3.2.0",
-    "koa-router": "^7.4.0",
-    "koa-static": "^5.0.0",
-    "koa2-cors": "^2.0.6",
-    "mongoose": "^5.3.7",
-    "mosca": "^2.8.3",
-    "mqtt": "^2.18.8",
-    "nodemailer": "^4.6.8",
-    "socket.io": "^2.2.0",
-    "ws": "^6.1.2"
-  }
+	"name": "project-serve",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"start": "node app.js"
+	},
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"jsonwebtoken": "^8.3.0",
+		"koa": "^2.6.1",
+		"koa-body": "^4.0.4",
+		"koa-jwt": "^3.5.1",
+		"koa-logger": "^3.2.0",
+		"koa-router": "^7.4.0",
+		"koa-static": "^5.0.0",
+		"koa2-cors": "^2.0.6",
+		"mongoose": "^5.3.7",
+		"mosca": "^2.8.3",
+		"mqtt": "^2.18.8",
+		"nodemailer": "^4.6.8",
+		"request": "^2.88.0",
+		"socket.io": "^2.2.0"
+	}
 }

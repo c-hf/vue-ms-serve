@@ -4,7 +4,7 @@ module.exports = {
 	init: () => {
 		mongoose.connect(
 			'mongodb://localhost:27017/koa',
-			{ useNewUrlParser: true }
+			{ useNewUrlParser: true, useFindAndModify: false }
 		);
 
 		mongoose.connection.on(
@@ -13,7 +13,7 @@ module.exports = {
 		);
 		mongoose.connection.once('open', () => {
 			// 连接成功
-			console.log('connection successful...');
+			console.log('mongoose connection successful...');
 		});
 	},
 	mongoose: mongoose,

@@ -251,7 +251,7 @@ const deleteDeviceCategory = async (ctx, next) => {
 	}
 
 	await Promise.all([
-		DeviceCategoryItem.find({ categoryId: reqData.id }).then(docs => {
+		DeviceCategoryItem.findOne({ categoryId: reqData.id }).then(docs => {
 			docs.forEach(el => {
 				Promise.all([
 					DeviceParam.deleteOne({

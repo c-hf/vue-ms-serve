@@ -4,10 +4,9 @@ const Schema = mongoose.Schema;
 // 定义schema
 const DeviceStatusSchema = new Schema(
 	{
-		// groupId: String, // 分组 Id
 		deviceId: String, // 设备 Id
 		onLine: Boolean,
-		attr: [
+		status: [
 			{
 				id: String,
 				value: String,

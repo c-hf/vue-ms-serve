@@ -2,11 +2,17 @@ const Device = require('../models/Device');
 const DeviceParam = require('../models/DeviceParam');
 const DeviceAttr = require('../models/DeviceAttr');
 const DeviceStatus = require('../models/DeviceStatus');
+const DeviceCategoryItem = require('../models/DeviceCategoryItem');
 
 const deviceHash = require('../utils/hash');
 const getJWTPayload = require('../utils/jsonWebToken').getJWTPayload;
 const APIError = require('../middleware/rest').APIError;
-const mqttClient = require('../middleware/mqttClient');
+// const io = require('../middleware/websocketServer').io;
+
+// updateDeviceStatus;
+// addDevice;
+// deleteDevice;
+// updateDevice;
 
 // set
 // 添加设备
@@ -22,9 +28,11 @@ const setDevice = async (ctx, next) => {
 			`系统未知错误`
 		);
 	}
+
 	await Promise.all([
 		new Device({
 			groupId: reqData.groupId,
+			roomId: reqData.roomId,
 			categoryItemId: reqData.categoryItemId,
 			deviceId: reqData.deviceId,
 			name: reqData.name,
@@ -32,18 +40,34 @@ const setDevice = async (ctx, next) => {
 			os: reqData.os,
 			networking: reqData.networking,
 			protocol: reqData.protocol,
-			param: reqData.param,
 		}).save(),
 		new DeviceStatus({
 			deviceId: reqData.deviceId,
 			onLine: false,
-			attr: reqData.attr,
+			status: reqData.status,
 		}).save(),
-		mqttClient.MQTTPublish(reqData.groupId, reqData.deviceId, reqData.name),
 	])
 		.then(docs => {
-			// console.log(docs);
-			ctx.rest('ok');
+			const device = {
+				groupId: docs[0].groupId,
+				categoryItemId: docs[0].categoryItemId,
+				deviceId: docs[0].deviceId,
+				roomId: docs[0].roomId,
+				name: docs[0].name,
+				desc: docs[0].desc,
+				networking: docs[0].networking,
+				os: docs[0].os,
+				protocol: docs[0].protocol,
+				onLine: docs[1].onLine,
+				status: docs[1].status,
+				createTime: docs[0].createTime,
+				updateTime: docs[1].updateTime,
+			};
+			io.to(reqData.groupId).emit('addDevice', device);
+
+			ctx.rest({
+				ok: true,
+			});
 		})
 		.catch(error => {
 			console.log(error);
@@ -60,16 +84,19 @@ const deleteDevice = async (ctx, next) => {
 		getJWTPayload(ctx.headers.authorization),
 		ctx.request.query,
 	];
-	const query = { groupId: reqData.groupId, deviceId: reqData.deviceId };
-
 	await Promise.all([
-		Device.deleteOne(query),
+		Device.deleteOne({
+			groupId: reqData.groupId,
+			deviceId: reqData.deviceId,
+		}),
 		DeviceStatus.deleteOne({
 			deviceId: reqData.deviceId,
 		}),
 	])
 		.then(docs => {
-			// console.log(docs);
+			io.to(reqData.groupId).emit('deleteDevice', {
+				deviceId: reqData.deviceId,
+			});
 			ctx.rest('ok');
 		})
 		.catch(error => {
@@ -85,10 +112,9 @@ const getAllDeviceInfo = async (ctx, next) => {
 		getJWTPayload(ctx.headers.authorization),
 		ctx.request.query,
 	];
-	const query = { groupId: reqData.groupId };
 	await Device.aggregate([
 		{
-			$match: query,
+			$match: { groupId: reqData.groupId },
 		},
 		{
 			$lookup: {
@@ -107,12 +133,6 @@ const getAllDeviceInfo = async (ctx, next) => {
 			},
 		},
 		{
-			$project: {
-				_id: 0,
-				id: 0,
-			},
-		},
-		{
 			$unwind: {
 				path: '$status', // 拆分子数组
 				preserveNullAndEmptyArrays: true, // 空的数组也拆分
@@ -126,7 +146,7 @@ const getAllDeviceInfo = async (ctx, next) => {
 		},
 	])
 		.then(docs => {
-			// console.log(docs);`
+			// console.log(docs);
 			ctx.rest(docs);
 		})
 		.catch(error => {
@@ -142,32 +162,7 @@ const getDeviceParamAndAttrById = async (ctx, next) => {
 		ctx.request.query,
 	];
 
-	await DeviceParam.aggregate([
-		{
-			$lookup: {
-				from: 'deviceAttrs',
-				localField: 'categoryItemId',
-				foreignField: 'categoryItemId',
-				as: 'attrData',
-			},
-		},
-		{
-			$match: query,
-		},
-		{
-			$project: {
-				_id: 0,
-				'param._id': 0,
-				'attrData.attr._id': 0,
-			},
-		},
-		{
-			$unwind: {
-				path: '$attrData', // 拆分子数组
-				preserveNullAndEmptyArrays: true, // 空的数组也拆分
-			},
-		},
-	])
+	await deviceParamAndAttr(query)
 		.then(docs => {
 			// console.log(docs);
 			if (!docs[0].categoryItemId) {
@@ -193,6 +188,28 @@ const getDeviceId = async (ctx, next) => {
 	ctx.rest({
 		deviceId: deviceId,
 	});
+};
+
+const deviceParamAndAttr = query => {
+	return DeviceParam.aggregate([
+		{
+			$lookup: {
+				from: 'deviceAttrs',
+				localField: 'categoryItemId',
+				foreignField: 'categoryItemId',
+				as: 'attrData',
+			},
+		},
+		{
+			$match: query,
+		},
+		{
+			$unwind: {
+				path: '$attrData', // 拆分子数组
+				preserveNullAndEmptyArrays: true, // 空的数组也拆分
+			},
+		},
+	]);
 };
 
 module.exports = {

@@ -8,15 +8,16 @@ const userInfoSchema = new Schema({
 	nickName: String,
 	avatar: {
 		type: String,
-		default: 'http://localhost:3000/static/avatar/0.jpg',
 	},
-	intro: String,
+	intro: {
+		type: String,
+		min: 1,
+		max: 64,
+	},
 	sex: {
 		type: String,
-		default: '男',
 	},
 	birthday: String,
-	region: String,
 });
 
 // 建立模型

@@ -5,6 +5,7 @@ const Schema = mongoose.Schema;
 const DeviceSchema = new Schema(
 	{
 		groupId: String, // 分组 Id
+		roomId: String, // 所在房间 Id
 		deviceId: String, // 设备 Id
 		categoryItemId: String, // 设备类型 Id
 		name: String,
@@ -12,25 +13,13 @@ const DeviceSchema = new Schema(
 		os: String,
 		networking: String,
 		protocol: String,
-		param: [
-			{
-				id: String,
-				name: String,
-				value: String,
-				unit: String,
-			},
-		],
 		createTime: {
-			type: Date,
-			default: Date.now,
-		},
-		updateTime: {
 			type: Date,
 			default: Date.now,
 		},
 	},
 	{
-		timestamps: { createdAt: 'createTime', updatedAt: 'updateTime' },
+		timestamps: { createdAt: 'createTime' },
 	}
 );
 

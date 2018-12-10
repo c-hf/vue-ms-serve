@@ -1,6 +1,10 @@
 module.exports = {
-	jwtSecret: 'chf',
-	staticPath: '/src/assets',
+	jwtSecret: 'chf', // 秘钥
+	expiresIn: 60 * 60 * 4, // 有效时间
+	reIssueTime: 30 * 60, // 重新签发时间
+	staticPath: '/src/assets', // 静态资源路径
+	imgUrlPath: '/src/assets/static/avatar',
+	imgUrl: 'http://localhost:3000/static/avatar/',
 	nodemailer: {
 		host: 'smtp.qq.com',
 		secureConnection: true, // use SSL

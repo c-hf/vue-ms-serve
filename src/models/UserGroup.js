@@ -7,13 +7,19 @@ const userGroupSchema = new Schema(
 		groupId: String, // 分组 Id
 		groupName: String, // 分组名
 		ownerId: String, // 拥有者 Id
-		member: [
+		// 所在地
+		region: [
 			{
-				userId: String, // 成员 Id
+				adcode: String,
+				name: String,
 			},
 		],
-		intro: String, // 简介
-		region: Array, // 所在地
+		// 成员
+		member: [
+			{
+				userId: String,
+			},
+		],
 		createTime: {
 			type: Date,
 			default: Date.now,

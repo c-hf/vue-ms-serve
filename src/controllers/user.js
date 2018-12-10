@@ -1,14 +1,22 @@
 const User = require('../models/User');
 const UserInfo = require('../models/UserInfo');
 const UserRole = require('../models/UserRole');
+const UserGroup = require('../models/UserGroup');
+const House = require('../models/House');
 const VerificationCode = require('../models/VerificationCode');
 
 const sendEmail = require('../utils/email');
 const signHash = require('../utils/hash');
 const getCode = require('../utils/code');
-const APIError = require('../middleware/rest').APIError;
 const jsonWebToken = require('../utils/jsonWebToken');
 const getId = require('../utils/getId');
+// Error 对象
+const APIError = require('../middleware/rest').APIError;
+// 图片上传路径
+const imgUrlPath = require('../config/index').imgUrlPath;
+const imgUrl = require('../config/index').imgUrl;
+const path = require('path');
+const fs = require('fs');
 
 // 邮件配置
 let mail = require('../config/index').mail;
@@ -104,7 +112,6 @@ const signUp = async (ctx, next) => {
 	}
 
 	query[reqData.type] = reqData.id;
-
 	await User.findOne(query).then(docs => {
 		if (docs) {
 			reqData.type === 'phone'
@@ -119,37 +126,38 @@ const signUp = async (ctx, next) => {
 
 	await VerificationCode.findOne({
 		id: reqData.id,
+		code: reqData.code,
 	})
 		.then(docs => {
 			if (!docs) {
 				throw new APIError(
-					'sign: verification_code_has_expired',
-					`验证码已失效`
+					'sign: verification_code_is_wrong',
+					'验证码错误'
 				);
-			} else {
-				if (date - docs.date > docs.validTime) {
-					throw new APIError(
-						'sign: verification_code_has_expired',
-						`验证码已过期`
-					);
-				} else if (reqData.code !== docs.code) {
-					throw new APIError(
-						'sign: verification_code_is_wrong',
-						`验证码错误`
-					);
-				}
+			} else if (date - docs.date > docs.validTime) {
+				throw new APIError(
+					'sign: verification_code_has_expired',
+					'验证码已过期'
+				);
 			}
 		})
-		.then(
+		.then(() => {
 			VerificationCode.deleteOne({
 				id: reqData.id,
-			})
-		);
+				code: reqData.code,
+			});
+		});
 
-	// id
+	// userId
 	const userId = getId(10);
-	// hmac密钥
-	const hmacPassWord = signHash.hmacPassWord(userId, reqData.password);
+	// hmac密钥, token
+	const [hmacPassWord, jwToken] = [
+		signHash.hmacPassWord(userId, reqData.password),
+		jsonWebToken.getToken({
+			userId: userId,
+			groupId: '',
+		}),
+	];
 
 	// 存入数据库
 	let [user, userInfo, userRole] = [
@@ -163,25 +171,33 @@ const signUp = async (ctx, next) => {
 			userId: userId,
 			groupId: '',
 			nickName: reqData.nickName,
+			avatar: '',
+			sex: '',
 			intro: '',
 			birthday: '',
-			region: '',
 		},
 		{
 			userId: userId,
 		},
 	];
 	user[reqData.type] = reqData.id;
+
 	await Promise.all([
 		new User(user).save(),
 		new UserInfo(userInfo).save(),
 		new UserRole(userRole).save(),
 	])
 		.then(() => {
-			ctx.rest('ok');
+			ctx.rest({
+				token: jwToken,
+				userInfo: {
+					userId: userId,
+					nickName: reqData.nickName,
+				},
+			});
 		})
-		.catch(err => {
-			console.log(err);
+		.catch(error => {
+			console.log(error);
 			throw new APIError('sign: unknown_error', `系统未知错误`);
 		});
 };
@@ -197,8 +213,8 @@ const signIn = async (ctx, next) => {
 		.then(docs => {
 			return docs;
 		})
-		.catch(err => {
-			console.log(err);
+		.catch(error => {
+			console.log(error);
 			throw new APIError('sign: database_error', `系统未知错误`);
 		})
 		.then(docs => {
@@ -225,8 +241,8 @@ const signIn = async (ctx, next) => {
 			});
 			ctx.rest({
 				token: jwToken,
-				emailId: docs[0].email,
 				userInfo: {
+					userId: docs[0].userId,
 					groupId: docs[0].userInfo.groupId,
 					nickName: docs[0].userInfo.nickName,
 					avatar: docs[0].userInfo.avatar,
@@ -236,6 +252,131 @@ const signIn = async (ctx, next) => {
 					region: docs[0].userInfo.region,
 				},
 			});
+		});
+};
+
+// 上传头像
+const setUserAvatar = async (ctx, next) => {
+	// 获取上传文件
+	const file = ctx.request.files.file;
+
+	if (!file) {
+		throw new APIError(
+			'user: set_user_avatar_unknown_error',
+			`系统未知错误`
+		);
+	}
+	try {
+		// 创建可读流
+		const reader = fs.createReadStream(file.path);
+		const [name, suffix] = [getId(12), file.name.split('.')];
+
+		const filePath =
+			path.join(__dirname, '../../', imgUrlPath) +
+			`/${name}.${suffix[suffix.length - 1]}`;
+
+		// 创建可写流,可读流通过管道写入可写流
+		reader.pipe(fs.createWriteStream(filePath));
+
+		ctx.rest({
+			url: `${imgUrl}${name}.${suffix[suffix.length - 1]}`,
+		});
+	} catch (error) {
+		console.log(error);
+		throw new APIError(
+			'user: set_user_avatar_unknown_error',
+			`系统未知错误`
+		);
+	}
+};
+
+// 完善资料
+const perfectInformation = async (ctx, next) => {
+	const [reqData = '', payload] = [
+		ctx.request.body,
+		jsonWebToken.getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'user: perfect_information_unknown_error',
+			`系统未知错误`
+		);
+	}
+	await UserInfo.findOne({ userId: payload.userId }).then(docs => {
+		if (docs.groupId.length) {
+			throw new APIError('user: groups_already_exist', `已创建家庭组`);
+		}
+	});
+
+	const [groupId, roomId] = [getId(10), getId(3)];
+	const jwToken = jsonWebToken.getToken({
+		userId: payload.userId,
+		groupId: groupId,
+	});
+
+	await Promise.all([
+		UserInfo.findOneAndUpdate(
+			{
+				userId: payload.userId,
+			},
+			{
+				groupId: groupId,
+				avatar: reqData.personalData.avatar,
+				sex: reqData.personalData.sex,
+				birthday: reqData.personalData.birthday,
+			},
+			{
+				new: true,
+			}
+		),
+		new UserGroup({
+			groupId: groupId,
+			ownerId: payload.userId,
+			groupName: reqData.householdGroupData.groupName,
+			region: reqData.householdGroupData.region,
+			member: [
+				{
+					userId: payload.userId,
+				},
+			],
+		}).save(),
+		new House({
+			groupId: groupId,
+			rooms: [
+				{
+					roomId: roomId,
+					name: '房间',
+					icon: '',
+				},
+			],
+		}).save(),
+	])
+		.then(docs => {
+			ctx.rest({
+				token: jwToken,
+				userInfo: {
+					userId: docs[0].userId,
+					groupId: docs[0].groupId,
+					nickName: docs[0].nickName,
+					avatar: docs[0].avatar,
+					intro: docs[0].intro,
+					sex: docs[0].sex,
+					birthday: docs[0].birthday,
+					region: docs[0].region,
+				},
+				groupInfo: {
+					groupId: docs[1].groupId,
+					groupName: docs[1].groupName,
+					ownerId: docs[1].ownerId,
+					member: docs[1].member,
+					region: docs[1].region,
+				},
+				rooms: docs[2].rooms,
+			});
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError('sign: unknown_error', `系统未知错误`);
 		});
 };
 
@@ -268,6 +409,13 @@ const getUserAvatar = async (ctx, next) => {
 		},
 	])
 		.then(docs => {
+			return docs;
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError('sign: database_error', `系统未知错误`);
+		})
+		.then(docs => {
 			if (!docs[0]) {
 				throw new APIError(
 					'sign: account_not_registered',
@@ -277,10 +425,6 @@ const getUserAvatar = async (ctx, next) => {
 			ctx.rest({
 				avatar: docs[0].userInfo[0].avatar,
 			});
-		})
-		.catch(err => {
-			console.log(err);
-			throw new APIError('sign: database_error', `系统未知错误`);
 		});
 };
 
@@ -293,6 +437,7 @@ const getUserInfo = async (ctx, next) => {
 	await UserInfo.findOne({ userId: payload.userId })
 		.then(docs => {
 			ctx.rest({
+				userId: docs.userId,
 				groupId: docs.groupId,
 				nickName: docs.nickName,
 				avatar: docs.avatar,
@@ -317,13 +462,21 @@ const getUserById = async (ctx, next) => {
 	query[reqData.type] = reqData.id;
 	await UserFind(query)
 		.then(docs => {
-			// console.log(docs);
+			console.log(docs);
+			if (!docs[0].userId) {
+				ctx.rest({
+					ok: false,
+				});
+			}
 			ctx.rest({
-				userId: docs[0].userId,
-				nickName: docs[0].userInfo.nickName,
-				avatar: docs[0].userInfo.avatar,
-				intro: docs[0].userInfo.intro,
-				sex: docs[0].userInfo.sex,
+				ok: true,
+				data: {
+					userId: docs[0].userId,
+					nickName: docs[0].userInfo.nickName,
+					avatar: docs[0].userInfo.avatar,
+					intro: docs[0].userInfo.intro,
+					sex: docs[0].userInfo.sex,
+				},
 			});
 		})
 		.catch(error => {
@@ -365,11 +518,15 @@ module.exports = {
 	'POST /api/user/signUp': signUp,
 	// 登录
 	'POST /api/user/signIn': signIn,
+	// 上传头像
+	'POST /api/user/setUserAvatar': setUserAvatar,
+	// 完善信息
+	'POST /api/user/perfectInformation': perfectInformation,
 
 	// 登出
 	'GET /api/user/signOut': signOut,
 	// 获取 user info
 	'GET /api/user/getUserInfo': getUserInfo,
-	// 查找 user
+	// 查找 user byId
 	'GET /api/user/getUserById': getUserById,
 };
