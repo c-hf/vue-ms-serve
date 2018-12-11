@@ -125,7 +125,7 @@ const setDeviceAttr = async (ctx, next) => {
 // put
 // 更新分类
 const updateDeviceCategory = async (ctx, next) => {
-	let reqData = ctx.request.body;
+	const reqData = ctx.request.body;
 	if (!reqData) {
 		throw new APIError(
 			'device: update_device_category_unknown_error',
@@ -151,7 +151,7 @@ const updateDeviceCategory = async (ctx, next) => {
 
 // 更新分类项
 const updateDeviceCategoryItem = async (ctx, next) => {
-	let reqData = ctx.request.body;
+	const reqData = ctx.request.body;
 	if (!reqData.categoryItemId) {
 		throw new APIError(
 			'device: update_device_category_item_unknown_error',
@@ -177,7 +177,7 @@ const updateDeviceCategoryItem = async (ctx, next) => {
 
 // 更新设备参数
 const updateDeviceParam = async (ctx, next) => {
-	let reqData = ctx.request.body;
+	const reqData = ctx.request.body;
 	if (!reqData.categoryItemId) {
 		throw new APIError(
 			'device: update_device_category_item_unknown_error',
@@ -209,7 +209,7 @@ const updateDeviceParam = async (ctx, next) => {
 
 // 更新设备属性
 const updateDeviceAttr = async (ctx, next) => {
-	let reqData = ctx.request.body;
+	const reqData = ctx.request.body;
 	if (!reqData.categoryItemId) {
 		throw new APIError(
 			'device: update_device_category_item_unknown_error',

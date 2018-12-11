@@ -1,9 +1,5 @@
-// const Server = require('socket.io');
 const jsonWebToken = require('../utils/jsonWebToken');
 const websocketKit = require('../utils/websocketKit');
-
-// io = new Server(server, {
-// 	allowRequest: allowRequest,
 
 // });
 // 初始化

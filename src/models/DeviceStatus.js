@@ -9,7 +9,10 @@ const DeviceStatusSchema = new Schema(
 		status: [
 			{
 				id: String,
+				name: String,
+				attrType: String,
 				value: String,
+				unit: String,
 			},
 		],
 		createTime: {

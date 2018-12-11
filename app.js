@@ -50,7 +50,7 @@ app.use((ctx, next) => {
 			ctx.status = 401;
 			ctx.body = {
 				code: 'internal: jwt_expired',
-				msg: error.originalError
+				message: error.originalError
 					? error.originalError.message
 					: error.message,
 			};

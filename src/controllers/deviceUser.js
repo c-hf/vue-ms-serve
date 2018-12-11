@@ -4,15 +4,10 @@ const DeviceAttr = require('../models/DeviceAttr');
 const DeviceStatus = require('../models/DeviceStatus');
 const DeviceCategoryItem = require('../models/DeviceCategoryItem');
 
+const mqttClient = require('../middleware/mqttClient');
 const deviceHash = require('../utils/hash');
 const getJWTPayload = require('../utils/jsonWebToken').getJWTPayload;
 const APIError = require('../middleware/rest').APIError;
-// const io = require('../middleware/websocketServer').io;
-
-// updateDeviceStatus;
-// addDevice;
-// deleteDevice;
-// updateDevice;
 
 // set
 // 添加设备
@@ -46,13 +41,16 @@ const setDevice = async (ctx, next) => {
 			onLine: false,
 			status: reqData.status,
 		}).save(),
+		DeviceCategoryItem.findOne({ categoryItemId: reqData.categoryItemId }),
 	])
 		.then(docs => {
 			const device = {
 				groupId: docs[0].groupId,
-				categoryItemId: docs[0].categoryItemId,
-				deviceId: docs[0].deviceId,
 				roomId: docs[0].roomId,
+				deviceId: docs[0].deviceId,
+				categoryId: docs[2].categoryId,
+				categoryItemId: docs[0].categoryItemId,
+				categoryItemName: docs[2].name,
 				name: docs[0].name,
 				desc: docs[0].desc,
 				networking: docs[0].networking,
@@ -63,8 +61,8 @@ const setDevice = async (ctx, next) => {
 				createTime: docs[0].createTime,
 				updateTime: docs[1].updateTime,
 			};
-			io.to(reqData.groupId).emit('addDevice', device);
 
+			io.to(reqData.groupId).emit('addDevice', device);
 			ctx.rest({
 				ok: true,
 			});
@@ -76,6 +74,30 @@ const setDevice = async (ctx, next) => {
 };
 
 // put
+const updateDeviceProfile = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_profile_unknown_error',
+			`系统未知错误`
+		);
+	}
+	try {
+		await mqttClient.MQTTPublish(
+			payload.groupId,
+			reqData.deviceId,
+			reqData.desired
+		);
+		ctx.rest({ ok: true });
+	} catch (error) {
+		console.log(error);
+		throw new APIError('device: database_error', `系统未知错误`);
+	}
+};
 
 // delete
 // 删除设备
@@ -204,6 +226,9 @@ const deviceParamAndAttr = query => {
 			$match: query,
 		},
 		{
+			$project: { 'param._id': 0, 'attrData.attr._id': 0 },
+		},
+		{
 			$unwind: {
 				path: '$attrData', // 拆分子数组
 				preserveNullAndEmptyArrays: true, // 空的数组也拆分
@@ -218,6 +243,9 @@ module.exports = {
 
 	// 删除设备
 	'DELETE /api/device/deleteDevice': deleteDevice,
+
+	// 更新设备属性
+	'PUT /api/device/updateDeviceProfile': updateDeviceProfile,
 
 	// 获取 groupId 下所有的设备信息
 	'GET /api/device/getAllDeviceInfo': getAllDeviceInfo,

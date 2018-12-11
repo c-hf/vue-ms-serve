@@ -45,12 +45,26 @@ const getDevices = groupId => {
 				from: 'deviceStatus',
 				localField: 'deviceId',
 				foreignField: 'deviceId',
-				as: 'statusData',
+				as: 'statusInfo',
+			},
+		},
+		{
+			$lookup: {
+				from: 'deviceCategoryItems',
+				localField: 'categoryItemId',
+				foreignField: 'categoryItemId',
+				as: 'categoryItemInfo',
 			},
 		},
 		{
 			$unwind: {
-				path: '$statusData',
+				path: '$statusInfo',
+				preserveNullAndEmptyArrays: true,
+			},
+		},
+		{
+			$unwind: {
+				path: '$categoryItemInfo',
 				preserveNullAndEmptyArrays: true,
 			},
 		},
@@ -60,18 +74,20 @@ const getDevices = groupId => {
 			docs.forEach(el => {
 				deviceData.push({
 					groupId: el.groupId,
-					categoryItemId: el.categoryItemId,
-					deviceId: el.deviceId,
 					roomId: el.roomId,
+					deviceId: el.deviceId,
+					categoryId: el.categoryItemInfo.categoryId,
+					categoryItemId: el.categoryItemId,
+					categoryItemName: el.categoryItemInfo.name,
 					name: el.name,
 					desc: el.desc,
 					networking: el.networking,
 					os: el.os,
 					protocol: el.protocol,
-					onLine: el.statusData.onLine,
-					status: el.statusData.status,
+					onLine: el.statusInfo.onLine,
+					status: el.statusInfo.status,
 					createTime: el.createTime,
-					updateTime: el.statusData.updateTime,
+					updateTime: el.statusInfo.updateTime,
 				});
 			});
 			return deviceData;
