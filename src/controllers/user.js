@@ -345,7 +345,7 @@ const perfectInformation = async (ctx, next) => {
 			rooms: [
 				{
 					roomId: roomId,
-					name: '房间',
+					name: '客厅',
 					icon: '',
 				},
 			],
