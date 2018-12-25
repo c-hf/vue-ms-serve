@@ -11,13 +11,13 @@ const jsonWebToken = require('../utils/jsonWebToken');
 const weChatAuthorize = async (ctx, next) => {
 	let [reqData = '', query] = [ctx.request.body, {}];
 	if (!reqData) {
-		throw new APIError('sign: unknown_error', `系统未知错误`);
+		throw new APIError('weChat: unknown_error', `系统未知错误`);
 	}
 
 	query[reqData.type] = reqData.id;
 	const docs = await UserFind(query);
 	if (!docs[0]) {
-		throw new APIError('sign: account_not_registered', `账号未注册`);
+		throw new APIError('weChat: account_not_registered', `账号未注册`);
 	}
 
 	const hmacPassWord = signHash.hmacPassWord(
@@ -25,12 +25,12 @@ const weChatAuthorize = async (ctx, next) => {
 		reqData.password
 	);
 	if (hmacPassWord !== docs[0].password) {
-		throw new APIError('sign: wrong_spassword', `密码错误`);
+		throw new APIError('weChat: wrong_spassword', `密码错误`);
 	}
 
 	let resData = await getOpenId(reqData.code).catch(error => {
 		console.log(error);
-		throw new APIError('sign: unknown_error', `系统未知错误`);
+		throw new APIError('weChat: unknown_error', `系统未知错误`);
 	});
 	resData = JSON.parse(resData);
 
@@ -62,20 +62,20 @@ const weChatAuthorize = async (ctx, next) => {
 const weChatSignIn = async (ctx, next) => {
 	const reqData = ctx.request.query;
 	if (!reqData) {
-		throw new APIError('user: unknown_error', `系统未知错误`);
+		throw new APIError('weChat: unknown_error', `系统未知错误`);
 	}
 
 	const code = reqData.code;
 	let resData = await getOpenId(code).catch(error => {
 		console.log(error);
-		throw new APIError('sign: unknown_error', `系统未知错误`);
+		throw new APIError('weChat: unknown_error', `系统未知错误`);
 	});
 	resData = JSON.parse(resData);
 
 	const docs = await OAuth.findOne({ oauthId: resData.openid }).catch(
 		error => {
 			console.log(error);
-			throw new APIError('user: unknown_error', `系统未知错误`);
+			throw new APIError('weChat: unknown_error', `系统未知错误`);
 		}
 	);
 	if (!docs) {

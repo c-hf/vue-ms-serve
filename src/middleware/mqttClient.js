@@ -1,28 +1,21 @@
 const mqtt = require('mqtt');
-const Device = require('../models/Device');
+// const client = mqtt.connect('mqtt://localhost:1883');
 
 // mqtt 初始化
 const MQTTClientInit = () => {
-	Device.find()
-		.then(docs => {
-			docs.forEach(el => {
-				mqttPublish(el.groupId, el.deviceId, el.name);
-			});
-
-			console.log('MQTT Init Success...');
-		})
-		.catch(error => {
-			console.log(`MQTT: ${error}`);
-		});
+	const client = mqtt.connect('mqtt://localhost:1883');
+	client.on('connect', () => {
+		console.log('connect...');
+	});
 };
 
 // 订阅
 const MQTTSubscribe = (groupId, deviceId, name) => {
 	// 连接
-	const client = mqtt.connect('mqtt://localhost:8000');
+	const client = mqtt.connect('mqtt://localhost:1883');
 
 	//订阅主题
-	client.subscribe(`device/desired/${groupId}/${deviceId}`, { qos: 1 });
+	client.subscribe(`device/status/${groupId}/${deviceId}`, { qos: 1 });
 
 	// 获得消息回调
 	client.on('message', (top, message) => {
@@ -33,7 +26,7 @@ const MQTTSubscribe = (groupId, deviceId, name) => {
 
 // 发布
 const MQTTPublish = (groupId, deviceId, data) => {
-	const client = mqtt.connect('mqtt://localhost:8000');
+	const client = mqtt.connect('mqtt://localhost:1883');
 	client.on('connect', () => {
 		client.publish(
 			`device/desired/${groupId}/${deviceId}`,

@@ -2,9 +2,15 @@ const mosca = require('mosca');
 const mqttClient = require('./mqttClient');
 const mqttKit = require('../utils/mqttKit');
 
-const MqttServer = new mosca.Server({
-	port: 8000,
-});
+const settings = {
+	http: {
+		port: 8000,
+		bundle: true,
+		static: './',
+	},
+};
+
+const MqttServer = new mosca.Server(settings);
 
 // 用户名与密码有效，接受链接
 const authenticate = (client, username, password, callback) => {
@@ -15,13 +21,17 @@ const authenticate = (client, username, password, callback) => {
 };
 
 const server = () => {
-	// 客户端连接时回调
+	// const MqttServer = new mosca.Server(settings);
+	// const MqttServer = new mosca.Server({});
+	// MqttServer.attachHttpServer(httpServe);
+
+	// clientConnected 回调
 	MqttServer.on('clientConnected', client => {
-		mqttKit.setOnline(client.id, true);
 		// console.log(`  --> mqtt-client connected: ${client.id}`);
+		mqttKit.setOnline(client.id, true);
 	});
 
-	// 发布时回调
+	// 发布回调
 	MqttServer.on('published', (packet, client) => {
 		try {
 			console.log(`  --> published : ${packet.payload}`);
@@ -48,12 +58,13 @@ const server = () => {
 		console.log('clientDisconnecting : ', client.id);
 	});
 
-	// 断开连接
+	// 断开连接 回调
 	MqttServer.on('clientDisconnected', client => {
-		mqttKit.setOnline(client.id, false);
 		// console.log('clientDisconnected : ', client.id);
+		mqttKit.setOnline(client.id, false);
 	});
 
+	// ready
 	MqttServer.on('ready', () => {
 		// MqttServer.authenticate = authenticate;
 		console.log('MQTT is running...');

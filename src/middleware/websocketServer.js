@@ -1,7 +1,6 @@
 const jsonWebToken = require('../utils/jsonWebToken');
 const websocketKit = require('../utils/websocketKit');
 
-// });
 // 初始化
 const init = () => {
 	io.on('connection', socket => {
@@ -12,6 +11,9 @@ const init = () => {
 		if (payload.groupId.length) {
 			websocketKit.getDevices(payload.groupId, socket).then(docs => {
 				socket.emit('deviceList', docs);
+			});
+			websocketKit.getGroup(payload.groupId).then(docs => {
+				socket.emit('group', docs);
 			});
 			websocketKit.getRooms(payload.groupId).then(docs => {
 				socket.emit('rooms', docs.rooms);

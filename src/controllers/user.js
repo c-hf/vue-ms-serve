@@ -370,6 +370,7 @@ const perfectInformation = async (ctx, next) => {
 					ownerId: docs[1].ownerId,
 					member: docs[1].member,
 					region: docs[1].region,
+					createTime: docs[1].createTime,
 				},
 				rooms: docs[2].rooms,
 			});

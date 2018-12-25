@@ -1,5 +1,6 @@
 const Device = require('../models/Device');
 const DeviceStatus = require('../models/DeviceStatus');
+const mqttClient = require('../middleware/mqttClient');
 
 // 更新数据库
 const updateStatus = async (deviceId, payload) => {
@@ -20,12 +21,24 @@ const updateStatus = async (deviceId, payload) => {
 			});
 		}),
 		Device.findOne({ deviceId: deviceId }),
-	]).then(docs => {
-		io.to(docs[1].groupId).emit('updateDeviceStatus', {
-			deviceId: deviceId,
-			status: payload,
+	])
+		.then(docs => {
+			if (!docs[1].groupId.length) {
+				return;
+			}
+			io.to(docs[1].groupId).emit('updateDeviceStatus', {
+				deviceId: deviceId,
+				status: payload,
+			});
+			// mqttClient.MQTTPublish(docs[1].groupId, deviceId, {
+			// 	desired: {
+			// 		switch: true,
+			// 	},
+			// });
+		})
+		.catch(error => {
+			console.log(error);
 		});
-	});
 };
 
 const setOnline = (deviceId, onLine) => {
@@ -48,6 +61,9 @@ const setOnline = (deviceId, onLine) => {
 };
 
 module.exports = {
+	// 更新 status
 	updateStatus: updateStatus,
+
+	// 设置在线状态
 	setOnline: setOnline,
 };

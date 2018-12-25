@@ -109,9 +109,32 @@ const getRooms = groupId => {
 		});
 };
 
+const getGroup = groupId => {
+	return UserGroup.findOne({ groupId: groupId })
+		.then(docs => {
+			if (docs.groupId.length) {
+				const resData = {
+					groupId: docs.groupId,
+					ownerId: docs.ownerId,
+					groupName: docs.groupName,
+					member: docs.member,
+					region: docs.region,
+					createTime: docs.createTime,
+				};
+
+				return resData;
+			}
+			return;
+		})
+		.catch(error => {
+			console.log(error);
+		});
+};
+
 module.exports = {
 	pushIo: pushIo,
 	pullIo: pullIo,
 	getDevices: getDevices,
 	getRooms: getRooms,
+	getGroup: getGroup,
 };
