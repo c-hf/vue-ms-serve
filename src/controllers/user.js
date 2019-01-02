@@ -463,7 +463,7 @@ const getUserById = async (ctx, next) => {
 	query[reqData.type] = reqData.id;
 	await UserFind(query)
 		.then(docs => {
-			console.log(docs);
+			// console.log(docs);
 			if (!docs[0].userId) {
 				ctx.rest({
 					ok: false,

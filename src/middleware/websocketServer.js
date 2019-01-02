@@ -49,7 +49,7 @@ const allowRequest = (req, cb) => {
 		);
 		payload.userId.length ? cb(null, true) : cb(null, false);
 	} catch (error) {
-		console.log(error);
+		console.log(error.message);
 		cb(null, false);
 	}
 };

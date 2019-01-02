@@ -1,11 +1,9 @@
-const Device = require('../models/Device');
 const DeviceCategory = require('../models/DeviceCategory');
 const DeviceCategoryItem = require('../models/DeviceCategoryItem');
 const DeviceParam = require('../models/DeviceParam');
 const DeviceAttr = require('../models/DeviceAttr');
 
 const getJWTPayload = require('../utils/jsonWebToken').getJWTPayload;
-
 const APIError = require('../middleware/rest').APIError;
 
 // set
@@ -18,15 +16,13 @@ const setDeviceCategory = async (ctx, next) => {
 			`系统未知错误`
 		);
 	}
-	let resData;
 	try {
-		new DeviceCategory(reqData).save();
-		resData = 'ok';
+		await new DeviceCategory(reqData).save();
+		ctx.rest({ ok: true });
 	} catch (error) {
 		console.log(error);
 		throw new APIError('device: database_error', `系统未知错误`);
 	}
-	ctx.rest(resData);
 };
 
 // 添加分类项
@@ -55,66 +51,7 @@ const setDeviceCategoryItem = async (ctx, next) => {
 		}).save(),
 	])
 		.then(() => {
-			ctx.rest('ok');
-		})
-		.catch(error => {
-			console.log(error);
-			throw new APIError('device: database_error', `系统未知错误`);
-		});
-};
-
-// 添加设备参数
-const setDeviceParam = async (ctx, next) => {
-	let reqData = ctx.request.body;
-	if (!reqData) {
-		throw new APIError(
-			'device: set_device_category_unknown_error',
-			`系统未知错误`
-		);
-	}
-
-	await DeviceParam.updateOne(
-		{
-			categoryItemId: reqData.categoryItemId,
-		},
-		{
-			$push: {
-				param: reqData.data,
-			},
-		}
-	)
-		.then(docs => {
-			// console.log(docs);
-			ctx.rest('ok');
-		})
-		.catch(error => {
-			console.log(error);
-			throw new APIError('device: database_error', `系统未知错误`);
-		});
-};
-
-// 添加设备属性
-const setDeviceAttr = async (ctx, next) => {
-	let reqData = ctx.request.body;
-	if (!reqData) {
-		throw new APIError(
-			'device: set_device_attr_unknown_error',
-			`系统未知错误`
-		);
-	}
-	await DeviceAttr.updateOne(
-		{
-			categoryItemId: reqData.categoryItemId,
-		},
-		{
-			$push: {
-				attr: reqData.data,
-			},
-		}
-	)
-		.then(docs => {
-			// console.log(docs);
-			ctx.rest('ok');
+			ctx.rest({ ok: true });
 		})
 		.catch(error => {
 			console.log(error);
@@ -132,47 +69,49 @@ const updateDeviceCategory = async (ctx, next) => {
 			`系统未知错误`
 		);
 	}
-	let resData;
-	await DeviceCategory.updateOne(
+
+	await DeviceCategory.findOneAndUpdate(
 		{
 			categoryId: reqData.categoryId,
 		},
-		reqData
+		reqData,
+		{
+			new: true,
+		}
 	)
 		.then(docs => {
-			// console.log(docs);
-			resData = 'ok';
+			ctx.rest({
+				categoryId: docs.categoryId,
+				name: docs.name,
+			});
 		})
 		.catch(error => {
+			console.log(error);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
-	ctx.rest(resData);
 };
 
 // 更新分类项
 const updateDeviceCategoryItem = async (ctx, next) => {
 	const reqData = ctx.request.body;
-	if (!reqData.categoryItemId) {
+	if (!reqData) {
 		throw new APIError(
 			'device: update_device_category_item_unknown_error',
 			`系统未知错误`
 		);
 	}
-	let resData;
-	await DeviceCategoryItem.updateOne(
-		{
-			categoryItemId: reqData.categoryItemId,
-		},
-		reqData
-	)
-		.then(docs => {
-			// console.log(docs);
-			resData = 'ok';
-		})
-		.catch(error => {
+	await reqData.forEach(el => {
+		DeviceCategoryItem.updateOne(
+			{
+				categoryItemId: el.categoryItemId,
+			},
+			{ name: el.name }
+		).catch(error => {
+			console.log(error);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
-	ctx.rest(resData);
+	});
+	ctx.rest({ ok: true });
 };
 
 // 更新设备参数
@@ -185,26 +124,26 @@ const updateDeviceParam = async (ctx, next) => {
 		);
 	}
 
-	await DeviceParam.updateOne(
+	await DeviceParam.findOneAndUpdate(
 		{
 			categoryItemId: reqData.categoryItemId,
-			'param.id': reqData.data.id,
 		},
+		{ param: reqData.data },
 		{
-			$set: {
-				'param.$': reqData.data,
-			},
+			new: true,
 		}
 	)
 		.then(docs => {
-			// console.log(docs);
-			resData = 'ok';
+			console.log(docs);
+			ctx.rest({
+				categoryItemId: docs.categoryItemId,
+				param: docs.param,
+			});
 		})
 		.catch(error => {
 			console.log(error);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
-	ctx.rest(resData);
 };
 
 // 更新设备属性
@@ -217,26 +156,26 @@ const updateDeviceAttr = async (ctx, next) => {
 		);
 	}
 
-	await DeviceAttr.updateOne(
+	await DeviceAttr.findOneAndUpdate(
 		{
 			categoryItemId: reqData.categoryItemId,
-			'attr.id': reqData.data.id,
 		},
+		{ attr: reqData.data },
 		{
-			$set: {
-				'attr.$': reqData.data,
-			},
+			new: true,
 		}
 	)
 		.then(docs => {
-			// console.log(docs);
-			resData = 'ok';
+			console.log(docs);
+			ctx.rest({
+				categoryItemId: docs.categoryItemId,
+				attr: docs.attr,
+			});
 		})
 		.catch(error => {
 			console.log(error);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
-	ctx.rest(resData);
 };
 
 // delete
@@ -251,7 +190,7 @@ const deleteDeviceCategory = async (ctx, next) => {
 	}
 
 	await Promise.all([
-		DeviceCategoryItem.findOne({ categoryId: reqData.id }).then(docs => {
+		DeviceCategoryItem.find({ categoryId: reqData.id }).then(docs => {
 			docs.forEach(el => {
 				Promise.all([
 					DeviceParam.deleteOne({
@@ -266,7 +205,7 @@ const deleteDeviceCategory = async (ctx, next) => {
 	])
 		.then(docs => {
 			// console.log(docs);
-			ctx.rest('ok');
+			ctx.rest({ ok: true });
 		})
 		.catch(error => {
 			console.log(error);
@@ -293,7 +232,7 @@ const deleteDeviceCategoryItem = async (ctx, next) => {
 	])
 		.then(docs => {
 			// console.log(docs);
-			ctx.rest('ok');
+			ctx.rest({ ok: true });
 		})
 		.catch(error => {
 			console.log(error);
@@ -313,7 +252,7 @@ deleteDeviceParam = async (ctx, next) => {
 			`系统未知错误`
 		);
 	}
-	await DeviceParam.updateOne(
+	await DeviceParam.findOneAndUpdate(
 		{
 			categoryItemId: reqData.categoryItemId,
 		},
@@ -323,11 +262,17 @@ deleteDeviceParam = async (ctx, next) => {
 					id: reqData.id,
 				},
 			},
+		},
+		{
+			new: true,
 		}
 	)
 		.then(docs => {
-			// console.log(docs);
-			ctx.rest('ok');
+			console.log(docs);
+			ctx.rest({
+				categoryItemId: docs.categoryItemId,
+				param: docs.param,
+			});
 		})
 		.catch(error => {
 			console.log(error);
@@ -344,7 +289,7 @@ deleteDeviceAttr = async (ctx, next) => {
 			`系统未知错误`
 		);
 	}
-	await DeviceAttr.updateOne(
+	await DeviceAttr.findOneAndUpdate(
 		{
 			categoryItemId: reqData.categoryItemId,
 		},
@@ -354,11 +299,17 @@ deleteDeviceAttr = async (ctx, next) => {
 					id: reqData.id,
 				},
 			},
+		},
+		{
+			new: true,
 		}
 	)
 		.then(docs => {
-			// console.log(docs);
-			ctx.rest('ok');
+			console.log(docs);
+			ctx.rest({
+				categoryItemId: docs.categoryItemId,
+				attr: docs.attr,
+			});
 		})
 		.catch(error => {
 			console.log(error);
@@ -368,7 +319,7 @@ deleteDeviceAttr = async (ctx, next) => {
 
 // get
 // 获取分类设备信息
-const getDeviceCategoryInfo = async (ctx, next) => {
+const getAllDeviceCategory = async (ctx, next) => {
 	const payload = getJWTPayload(ctx.headers.authorization);
 	await DeviceCategory.aggregate([
 		{
@@ -382,12 +333,58 @@ const getDeviceCategoryInfo = async (ctx, next) => {
 		{
 			$project: {
 				_id: 0,
+				__v: 0,
+				'categoryItem._id': 0,
+				'categoryItem.__v': 0,
 			},
 		},
 	])
 		.then(docs => {
 			// console.log(docs);
 			ctx.rest(docs);
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+};
+
+// 获取分类与分类设备
+const getDeviceCategoryById = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: delete_device_category_unknown_error',
+			`系统未知错误`
+		);
+	}
+	await DeviceCategory.aggregate([
+		{
+			$match: { categoryId: reqData.categoryId },
+		},
+		{
+			$lookup: {
+				from: 'deviceCategoryItems',
+				localField: 'categoryId',
+				foreignField: 'categoryId',
+				as: 'categoryItem',
+			},
+		},
+		{
+			$project: {
+				_id: 0,
+				__v: 0,
+				'categoryItem._id': 0,
+				'categoryItem.__v': 0,
+			},
+		},
+	])
+		.then(docs => {
+			// console.log(docs);
+			if (!docs.length) {
+				ctx.rest({});
+			}
+			ctx.rest(docs[0]);
 		})
 		.catch(error => {
 			console.log(error);
@@ -465,10 +462,6 @@ module.exports = {
 	'POST /api/device/setDeviceCategory': setDeviceCategory,
 	// 添加分类项
 	'POST /api/device/setDeviceCategoryItem': setDeviceCategoryItem,
-	// 添加设备参数
-	'POST /api/device/setDeviceParam': setDeviceParam,
-	// 添加设备属性
-	'POST /api/device/setDeviceAttr': setDeviceAttr,
 
 	// 更新分类
 	'PUT /api/device/updateDeviceCategory': updateDeviceCategory,
@@ -488,8 +481,11 @@ module.exports = {
 	// 删除设备属性
 	'DELETE /api/device/deleteDeviceAttr': deleteDeviceAttr,
 
-	// 获取所有分类与分类设备信息
-	'GET /api/device/getDeviceCategoryInfo': getDeviceCategoryInfo,
+	// 获取所有分类与分类设备
+	'GET /api/device/getAllDeviceCategory': getAllDeviceCategory,
+	// 获取分类与分类设备
+	'GET /api/device/getDeviceCategoryById': getDeviceCategoryById,
+
 	// 获取所有设备参数
 	'GET /api/device/getAllDeviceParam': getAllDeviceParam,
 	// 获取所有设备属性

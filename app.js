@@ -113,7 +113,7 @@ mongoose.init();
 const server = app.listen(3000);
 
 // mqtt Server
-mqtt.server(server);
+mqtt.server();
 
 global.io = require('socket.io')(server, {
 	allowRequest: wss.allowRequest,

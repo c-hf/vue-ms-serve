@@ -30,11 +30,6 @@ const updateStatus = async (deviceId, payload) => {
 				deviceId: deviceId,
 				status: payload,
 			});
-			// mqttClient.MQTTPublish(docs[1].groupId, deviceId, {
-			// 	desired: {
-			// 		switch: true,
-			// 	},
-			// });
 		})
 		.catch(error => {
 			console.log(error);

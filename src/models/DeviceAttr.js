@@ -4,15 +4,7 @@ const Schema = mongoose.Schema;
 // 定义schema
 const deviceAttrSchema = new Schema({
 	categoryItemId: String,
-	attr: [
-		{
-			id: String,
-			name: String,
-			attrType: String,
-			value: String,
-			unit: String,
-		},
-	],
+	attr: [Object],
 });
 
 // 建立模型

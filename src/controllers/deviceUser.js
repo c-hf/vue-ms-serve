@@ -12,16 +12,9 @@ const APIError = require('../middleware/rest').APIError;
 // set
 // 添加设备
 const setDevice = async (ctx, next) => {
-	const [payload, reqData] = [
-		getJWTPayload(ctx.headers.authorization),
-		ctx.request.body,
-	];
-
+	const reqData = ctx.request.body;
 	if (!reqData) {
-		throw new APIError(
-			'device: set_device_category_unknown_error',
-			`系统未知错误`
-		);
+		throw new APIError('device: set_device_unknown_error', `系统未知错误`);
 	}
 
 	await Promise.all([
@@ -44,25 +37,27 @@ const setDevice = async (ctx, next) => {
 		DeviceCategoryItem.findOne({ categoryItemId: reqData.categoryItemId }),
 	])
 		.then(docs => {
-			const device = {
-				groupId: docs[0].groupId,
-				roomId: docs[0].roomId,
-				deviceId: docs[0].deviceId,
-				categoryId: docs[2].categoryId,
-				categoryItemId: docs[0].categoryItemId,
-				categoryItemName: docs[2].name,
-				name: docs[0].name,
-				desc: docs[0].desc,
-				networking: docs[0].networking,
-				os: docs[0].os,
-				protocol: docs[0].protocol,
-				onLine: docs[1].onLine,
+			const resData = {
+				device: {
+					groupId: docs[0].groupId,
+					roomId: docs[0].roomId,
+					deviceId: docs[0].deviceId,
+					categoryId: docs[2].categoryId,
+					categoryItemId: docs[0].categoryItemId,
+					categoryItemName: docs[2].name,
+					name: docs[0].name,
+					desc: docs[0].desc,
+					networking: docs[0].networking,
+					os: docs[0].os,
+					protocol: docs[0].protocol,
+					onLine: docs[1].onLine,
+					createTime: docs[0].createTime,
+					updateTime: docs[1].updateTime,
+				},
 				status: docs[1].status,
-				createTime: docs[0].createTime,
-				updateTime: docs[1].updateTime,
 			};
 
-			io.to(reqData.groupId).emit('addDevice', device);
+			io.to(reqData.groupId).emit('addDevice', resData);
 			ctx.rest({
 				ok: true,
 			});
@@ -73,18 +68,14 @@ const setDevice = async (ctx, next) => {
 		});
 };
 
-// put
-const updateDeviceProfile = async (ctx, next) => {
+const setDesired = async (ctx, next) => {
 	const [reqData, payload] = [
 		ctx.request.body,
 		getJWTPayload(ctx.headers.authorization),
 	];
 
 	if (!reqData) {
-		throw new APIError(
-			'device: update_device_profile_unknown_error',
-			`系统未知错误`
-		);
+		throw new APIError('device: set_desired_unknown_error', `系统未知错误`);
 	}
 	try {
 		await mqttClient.MQTTPublish(
@@ -99,13 +90,58 @@ const updateDeviceProfile = async (ctx, next) => {
 	}
 };
 
+// put
+const updateDevice = async (ctx, next) => {
+	const reqData = ctx.request.body;
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	const docs = await Device.findOneAndUpdate(
+		{
+			deviceId: reqData.deviceId,
+		},
+		reqData.data,
+		{
+			new: true,
+		}
+	).catch(error => {
+		console.log(error);
+		throw new APIError('device: update_device_failed', '更新失败');
+	});
+	if (docs) {
+		ctx.rest({
+			groupId: docs.groupId,
+			roomId: docs.roomId,
+			categoryItemId: docs.categoryItemId,
+			deviceId: docs.deviceId,
+			name: docs.name,
+			desc: docs.desc,
+			os: docs.os,
+			networking: docs.networking,
+			protocol: docs.protocol,
+		});
+	} else {
+		throw new APIError(
+			'device: update_device_failed',
+			'设备不存在，请重试'
+		);
+	}
+};
+
 // delete
 // 删除设备
 const deleteDevice = async (ctx, next) => {
-	const [payload, reqData] = [
-		getJWTPayload(ctx.headers.authorization),
-		ctx.request.query,
-	];
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: delete_device_unknown_error',
+			`系统未知错误`
+		);
+	}
 	await Promise.all([
 		Device.deleteOne({
 			groupId: reqData.groupId,
@@ -130,10 +166,14 @@ const deleteDevice = async (ctx, next) => {
 // get
 // 获取用户所有的设备信息
 const getAllDeviceInfo = async (ctx, next) => {
-	const [payload, reqData] = [
-		getJWTPayload(ctx.headers.authorization),
-		ctx.request.query,
-	];
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: get_all_device_info_unknown_error',
+			`系统未知错误`
+		);
+	}
+
 	await Device.aggregate([
 		{
 			$match: { groupId: reqData.groupId },
@@ -179,12 +219,15 @@ const getAllDeviceInfo = async (ctx, next) => {
 
 // 获取设备参数与属性
 const getDeviceParamAndAttrById = async (ctx, next) => {
-	const [payload, query] = [
-		getJWTPayload(ctx.headers.authorization),
-		ctx.request.query,
-	];
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: get_dpeviceParam_and_attr_by_id_unknown_error',
+			`系统未知错误`
+		);
+	}
 
-	await deviceParamAndAttr(query)
+	await deviceParamAndAttr(reqData)
 		.then(docs => {
 			// console.log(docs);
 			if (!docs[0].categoryItemId) {
@@ -240,12 +283,14 @@ const deviceParamAndAttr = query => {
 module.exports = {
 	// 添加设备
 	'POST /api/device/setDevice': setDevice,
+	// 操作设备
+	'POST /api/device/setDesired': setDesired,
+
+	// 更新设备参数
+	'PUT /api/device/updateDevice': updateDevice,
 
 	// 删除设备
 	'DELETE /api/device/deleteDevice': deleteDevice,
-
-	// 更新设备属性
-	'PUT /api/device/updateDeviceProfile': updateDeviceProfile,
 
 	// 获取 groupId 下所有的设备信息
 	'GET /api/device/getAllDeviceInfo': getAllDeviceInfo,

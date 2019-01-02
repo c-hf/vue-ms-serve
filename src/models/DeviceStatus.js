@@ -6,15 +6,7 @@ const DeviceStatusSchema = new Schema(
 	{
 		deviceId: String, // 设备 Id
 		onLine: Boolean,
-		status: [
-			{
-				id: String,
-				name: String,
-				attrType: String,
-				value: String,
-				unit: String,
-			},
-		],
+		status: Object,
 		createTime: {
 			type: Date,
 			default: Date.now,

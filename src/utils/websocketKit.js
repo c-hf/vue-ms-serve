@@ -70,27 +70,29 @@ const getDevices = groupId => {
 		},
 	])
 		.then(docs => {
-			const deviceData = [];
+			const resData = [];
 			docs.forEach(el => {
-				deviceData.push({
-					groupId: el.groupId,
-					roomId: el.roomId,
-					deviceId: el.deviceId,
-					categoryId: el.categoryItemInfo.categoryId,
-					categoryItemId: el.categoryItemId,
-					categoryItemName: el.categoryItemInfo.name,
-					name: el.name,
-					desc: el.desc,
-					networking: el.networking,
-					os: el.os,
-					protocol: el.protocol,
-					onLine: el.statusInfo.onLine,
+				resData.push({
+					device: {
+						groupId: el.groupId,
+						roomId: el.roomId,
+						deviceId: el.deviceId,
+						categoryId: el.categoryItemInfo.categoryId,
+						categoryItemId: el.categoryItemId,
+						categoryItemName: el.categoryItemInfo.name,
+						name: el.name,
+						desc: el.desc,
+						networking: el.networking,
+						os: el.os,
+						protocol: el.protocol,
+						onLine: el.statusInfo.onLine,
+						createTime: el.createTime,
+						updateTime: el.statusInfo.updateTime,
+					},
 					status: el.statusInfo.status,
-					createTime: el.createTime,
-					updateTime: el.statusInfo.updateTime,
 				});
 			});
-			return deviceData;
+			return resData;
 		})
 		.catch(error => {
 			console.log(error);
