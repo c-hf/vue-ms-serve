@@ -30,7 +30,7 @@ const MQTTPublish = (groupId, deviceId, data) => {
 	client.on('connect', () => {
 		client.publish(
 			`device/desired/${groupId}/${deviceId}`,
-			JSON.stringify(data),
+			JSON.stringify({ desired: data }),
 			{
 				qos: 1,
 				retain: true,

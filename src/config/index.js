@@ -4,7 +4,8 @@ module.exports = {
 	reIssueTime: 30 * 60, // 重新签发时间
 	staticPath: '/src/assets', // 静态资源路径
 	imgUrlPath: '/src/assets/static/avatar',
-	imgUrl: 'http://localhost:3000/static/avatar/',
+	imgUrl: 'http://10.10.72.4:3000/static/avatar/',
+
 	nodemailer: {
 		host: 'smtp.qq.com',
 		secureConnection: true, // use SSL
@@ -15,6 +16,7 @@ module.exports = {
 			pass: 'fruulubmyywbbcge',
 		},
 	},
+
 	mail: {
 		// 发件人
 		from: 'chfeng.top<825931062@qq.com>',
@@ -24,5 +26,29 @@ module.exports = {
 		subject: '',
 		// html: '',
 		html: '',
+	},
+
+	source: {
+		User: '控制台',
+		WeChat: '小程序',
+		Voice: '语音',
+		Device: '设备',
+	},
+
+	logKeyWord: {
+		switch: '设备',
+		true: '开启',
+		false: '关闭',
+		luminance: '亮度调整为',
+		10: '10%',
+		20: '20%',
+		30: '30%',
+		40: '40%',
+		50: '50%',
+		60: '60%',
+		70: '70%',
+		80: '80%',
+		90: '90%',
+		100: '100%',
 	},
 };

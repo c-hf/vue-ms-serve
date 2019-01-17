@@ -10,6 +10,7 @@ const signHash = require('../utils/hash');
 const getCode = require('../utils/code');
 const jsonWebToken = require('../utils/jsonWebToken');
 const getId = require('../utils/getId');
+
 // Error 对象
 const APIError = require('../middleware/rest').APIError;
 // 图片上传路径

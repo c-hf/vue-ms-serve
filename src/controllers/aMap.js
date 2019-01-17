@@ -10,7 +10,7 @@ const getWeatherInfo = async (ctx, next) => {
 
 	const resData = await getWeather(reqData.city).catch(error => {
 		console.log(error);
-		throw new APIError('weChat: unknown_error', `系统未知错误`);
+		throw new APIError('aMap: unknown_error', `系统未知错误`);
 	});
 
 	ctx.rest(resData);
@@ -22,6 +22,9 @@ const getWeather = city => {
 		let url = `https://restapi.amap.com/v3/weather/weatherInfo?city=${city}&key=${key}`;
 		request(url, (error, response, body) => {
 			if (error) reject(error);
+			if (!body) {
+				return;
+			}
 			resolve(JSON.parse(body));
 		});
 	});

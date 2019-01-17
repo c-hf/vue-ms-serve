@@ -7,6 +7,7 @@ module.exports = {
 		hashId.update(id);
 		return hashId.digest('hex');
 	},
+
 	// password
 	hmacPassWord: (jwToken, password) => {
 		const hmacSecret = jwToken;

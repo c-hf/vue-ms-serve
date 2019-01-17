@@ -1,4 +1,5 @@
 const Device = require('../models/Device');
+const DeviceLog = require('../models/DeviceLog');
 const DeviceParam = require('../models/DeviceParam');
 const DeviceAttr = require('../models/DeviceAttr');
 const DeviceStatus = require('../models/DeviceStatus');
@@ -8,6 +9,8 @@ const mqttClient = require('../middleware/mqttClient');
 const deviceHash = require('../utils/hash');
 const getJWTPayload = require('../utils/jsonWebToken').getJWTPayload;
 const APIError = require('../middleware/rest').APIError;
+const setDesiredLog = require('../utils/logKit').setDesiredLog;
+const getId = require('../utils/getId');
 
 // set
 // 添加设备
@@ -30,6 +33,7 @@ const setDevice = async (ctx, next) => {
 			protocol: reqData.protocol,
 		}).save(),
 		new DeviceStatus({
+			groupId: reqData.groupId,
 			deviceId: reqData.deviceId,
 			onLine: false,
 			status: reqData.status,
@@ -68,21 +72,32 @@ const setDevice = async (ctx, next) => {
 		});
 };
 
+// 操作设备
 const setDesired = async (ctx, next) => {
 	const [reqData, payload] = [
 		ctx.request.body,
 		getJWTPayload(ctx.headers.authorization),
 	];
-
 	if (!reqData) {
 		throw new APIError('device: set_desired_unknown_error', `系统未知错误`);
 	}
 	try {
-		await mqttClient.MQTTPublish(
-			payload.groupId,
-			reqData.deviceId,
-			reqData.desired
-		);
+		const desiredId = getId(15);
+		await Promise.all([
+			mqttClient.MQTTPublish(
+				payload.groupId,
+				reqData.deviceId,
+				reqData.desired
+			),
+			setDesiredLog({
+				logId: desiredId,
+				groupId: payload.groupId,
+				deviceId: reqData.deviceId,
+				source: 'User',
+				logType: 'info',
+				desired: reqData.desired,
+			}),
+		]);
 		ctx.rest({ ok: true });
 	} catch (error) {
 		console.log(error);
@@ -91,6 +106,7 @@ const setDesired = async (ctx, next) => {
 };
 
 // put
+// 更新设备参数
 const updateDevice = async (ctx, next) => {
 	const reqData = ctx.request.body;
 	if (!reqData) {
@@ -135,7 +151,11 @@ const updateDevice = async (ctx, next) => {
 // delete
 // 删除设备
 const deleteDevice = async (ctx, next) => {
-	const reqData = ctx.request.query;
+	const [reqData, payload] = [
+		ctx.request.query,
+		getJWTPayload(ctx.headers.authorization),
+	];
+
 	if (!reqData) {
 		throw new APIError(
 			'device: delete_device_unknown_error',
@@ -144,7 +164,7 @@ const deleteDevice = async (ctx, next) => {
 	}
 	await Promise.all([
 		Device.deleteOne({
-			groupId: reqData.groupId,
+			groupId: payload.groupId,
 			deviceId: reqData.deviceId,
 		}),
 		DeviceStatus.deleteOne({
@@ -152,14 +172,38 @@ const deleteDevice = async (ctx, next) => {
 		}),
 	])
 		.then(docs => {
-			io.to(reqData.groupId).emit('deleteDevice', {
+			io.to(payload.groupId).emit('deleteDevice', {
 				deviceId: reqData.deviceId,
 			});
-			ctx.rest('ok');
+			ctx.rest({ ok: true });
 		})
 		.catch(error => {
 			console.log(error);
 			throw new APIError('device: delete_device_failed', '删除失败');
+		});
+};
+
+// 删除日志
+const deleteDeviceLog = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: delete_device_log_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await DeviceLog.deleteMany({ deviceId: reqData.deviceId })
+		.then(docs => {
+			if (docs.ok) {
+				ctx.rest({ ok: true });
+			} else {
+				ctx.rest({ ok: false });
+			}
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError('device: database_error', `系统未知错误`);
 		});
 };
 
@@ -229,7 +273,6 @@ const getDeviceParamAndAttrById = async (ctx, next) => {
 
 	await deviceParamAndAttr(reqData)
 		.then(docs => {
-			// console.log(docs);
 			if (!docs[0].categoryItemId) {
 				ctx.rest(docs);
 				return;
@@ -244,6 +287,56 @@ const getDeviceParamAndAttrById = async (ctx, next) => {
 			console.log(error);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
+};
+
+// 获取设备属性
+const getDeviceAttrById = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: get_dpeviceParam_and_attr_by_id_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await DeviceAttr.findOne({
+		categoryItemId: reqData.categoryItemId,
+	})
+		.then(docs => {
+			ctx.rest(docs.attr);
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+};
+
+// 获取设备日志
+const getDeviceLogById = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: get_device_log_by_id_unknown_error',
+			`系统未知错误`
+		);
+	}
+	let docs = await getLogs(reqData).catch(error => {
+		console.log(error);
+		throw new APIError('device: database_error', `系统未知错误`);
+	});
+
+	if (!docs.length && Number(reqData.dayNum) === 0) {
+		docs = await DeviceLog.find({
+			deviceId: reqData.deviceId,
+		})
+			.sort({ _id: -1 })
+			.limit(5)
+			.catch(error => {
+				console.log(error);
+				throw new APIError('device: database_error', `系统未知错误`);
+			});
+	}
+	ctx.rest(docs);
 };
 
 // 获取设备 Id
@@ -280,6 +373,22 @@ const deviceParamAndAttr = query => {
 	]);
 };
 
+const getLogs = reqData => {
+	const date = new Date();
+	const [start, end] = [
+		new Date(
+			date.getFullYear(),
+			date.getMonth(),
+			date.getDate() - reqData.dayNum
+		),
+		new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
+	];
+	return DeviceLog.find({
+		deviceId: reqData.deviceId,
+		createTime: { $gte: start, $lt: end },
+	}).sort({ _id: -1 });
+};
+
 module.exports = {
 	// 添加设备
 	'POST /api/device/setDevice': setDevice,
@@ -291,16 +400,17 @@ module.exports = {
 
 	// 删除设备
 	'DELETE /api/device/deleteDevice': deleteDevice,
-
-	// 获取 groupId 下所有的设备信息
-	'GET /api/device/getAllDeviceInfo': getAllDeviceInfo,
-
-	// 获取设备信息
-	// 'GET /api/device/getDeviceInfoById': getDeviceInfo,
+	// 删除日志
+	'DELETE /api/device/deleteDeviceLog': deleteDeviceLog,
 
 	// 获取设备参数与属性
 	'GET /api/device/getDeviceParamAndAttrById': getDeviceParamAndAttrById,
-
+	// 获取属性
+	'GET /api/device/getDeviceAttrById': getDeviceAttrById,
+	// 获取 groupId 下所有的设备信息
+	'GET /api/device/getAllDeviceInfo': getAllDeviceInfo,
+	// 获取设备日志
+	'GET /api/device/getDeviceLogById': getDeviceLogById,
 	// 获取设备 Id
 	'GET /api/device/getDeviceId': getDeviceId,
 };

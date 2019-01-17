@@ -32,7 +32,7 @@ app.use(
 	cors({
 		origin: '*',
 		exposeHeaders: ['WWW-Authenticate', 'Server-Authorization'],
-		maxAge: 600,
+		maxAge: 10000,
 		credentials: true,
 		allowMethods: ['GET', 'POST', 'DELETE', 'PUT'],
 		allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
@@ -115,9 +115,10 @@ const server = app.listen(3000);
 // mqtt Server
 mqtt.server();
 
-global.io = require('socket.io')(server, {
-	allowRequest: wss.allowRequest,
-});
+// global.io = require('socket.io')(server, {
+// 	allowRequest: wss.allowRequest,
+// });
+global.io = require('socket.io')(server);
 
 // wss
 wss.init(server);

@@ -134,7 +134,6 @@ const updateDeviceParam = async (ctx, next) => {
 		}
 	)
 		.then(docs => {
-			console.log(docs);
 			ctx.rest({
 				categoryItemId: docs.categoryItemId,
 				param: docs.param,
@@ -166,7 +165,6 @@ const updateDeviceAttr = async (ctx, next) => {
 		}
 	)
 		.then(docs => {
-			console.log(docs);
 			ctx.rest({
 				categoryItemId: docs.categoryItemId,
 				attr: docs.attr,
@@ -204,7 +202,7 @@ const deleteDeviceCategory = async (ctx, next) => {
 		DeviceCategoryItem.deleteMany({ categoryId: reqData.id }),
 	])
 		.then(docs => {
-			// console.log(docs);
+			//
 			ctx.rest({ ok: true });
 		})
 		.catch(error => {
@@ -231,7 +229,7 @@ const deleteDeviceCategoryItem = async (ctx, next) => {
 		DeviceAttr.deleteOne({ categoryItemId: reqData.id }),
 	])
 		.then(docs => {
-			// console.log(docs);
+			//
 			ctx.rest({ ok: true });
 		})
 		.catch(error => {
@@ -268,7 +266,6 @@ deleteDeviceParam = async (ctx, next) => {
 		}
 	)
 		.then(docs => {
-			console.log(docs);
 			ctx.rest({
 				categoryItemId: docs.categoryItemId,
 				param: docs.param,
@@ -305,7 +302,6 @@ deleteDeviceAttr = async (ctx, next) => {
 		}
 	)
 		.then(docs => {
-			console.log(docs);
 			ctx.rest({
 				categoryItemId: docs.categoryItemId,
 				attr: docs.attr,
@@ -340,7 +336,7 @@ const getAllDeviceCategory = async (ctx, next) => {
 		},
 	])
 		.then(docs => {
-			// console.log(docs);
+			//
 			ctx.rest(docs);
 		})
 		.catch(error => {
@@ -380,7 +376,7 @@ const getDeviceCategoryById = async (ctx, next) => {
 		},
 	])
 		.then(docs => {
-			// console.log(docs);
+			//
 			if (!docs.length) {
 				ctx.rest({});
 			}
@@ -396,7 +392,7 @@ const getDeviceCategoryById = async (ctx, next) => {
 const getAllDeviceParam = async (ctx, next) => {
 	await DeviceParam.find()
 		.then(docs => {
-			// console.log(docs);
+			//
 			ctx.rest(docs);
 		})
 		.catch(error => {
@@ -409,7 +405,7 @@ const getAllDeviceParam = async (ctx, next) => {
 const getAllDeviceAttr = async (ctx, next) => {
 	await DeviceAttr.find()
 		.then(docs => {
-			// console.log(docs);
+			//
 			ctx.rest(docs);
 		})
 		.catch(error => {

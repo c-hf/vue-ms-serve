@@ -1,34 +1,30 @@
-const Device = require('../models/Device');
 const DeviceStatus = require('../models/DeviceStatus');
-const mqttClient = require('../middleware/mqttClient');
+const setOnlineLog = require('../utils/logKit').setOnlineLog;
 
 // 更新数据库
 const updateStatus = async (deviceId, payload) => {
 	if (!deviceId || !payload) {
 		return;
 	}
-	await Promise.all([
-		payload.forEach(el => {
-			DeviceStatus.updateOne(
-				{ deviceId: deviceId, 'status.id': el.id },
-				{
-					$set: {
-						'status.$.value': el.value,
-					},
-				}
-			).catch(error => {
-				console.log(`MQTT_database_error: ${error}`);
-			});
-		}),
-		Device.findOne({ deviceId: deviceId }),
-	])
+	let data = {};
+	Object.keys(payload).forEach(el => {
+		data[`status.${el}`] = payload[el];
+	});
+
+	DeviceStatus.findOneAndUpdate(
+		{ deviceId: deviceId },
+		{ $set: data },
+		{
+			new: true,
+		}
+	)
 		.then(docs => {
-			if (!docs[1].groupId.length) {
+			if (!docs.groupId) {
 				return;
 			}
-			io.to(docs[1].groupId).emit('updateDeviceStatus', {
+			io.to(docs.groupId).emit('updateDeviceStatus', {
 				deviceId: deviceId,
-				status: payload,
+				status: docs.status,
 			});
 		})
 		.catch(error => {
@@ -37,15 +33,27 @@ const updateStatus = async (deviceId, payload) => {
 };
 
 const setOnline = (deviceId, onLine) => {
-	return Promise.all([
-		DeviceStatus.updateOne({ deviceId: deviceId }, { onLine: onLine }),
-		Device.findOne({ deviceId: deviceId }),
-	])
+	return DeviceStatus.findOneAndUpdate(
+		{ deviceId: deviceId },
+		{ onLine: onLine },
+		{ new: true }
+	)
 		.then(docs => {
-			if (!docs[1]) {
+			let logType = 'info';
+			if (!onLine) {
+				logType = 'warn';
+			}
+			setOnlineLog({
+				groupId: docs.groupId,
+				deviceId: deviceId,
+				source: 'Device',
+				logType: logType,
+				onLine: onLine,
+			});
+			if (!docs.groupId) {
 				return;
 			}
-			io.to(docs[1].groupId).emit('updateOnline', {
+			io.to(docs.groupId).emit('updateOnline', {
 				deviceId: deviceId,
 				onLine: onLine,
 			});

@@ -102,7 +102,6 @@ const weChatSignIn = async (ctx, next) => {
 				intro: docs[0].userInfo.intro,
 				sex: docs[0].userInfo.sex,
 				birthday: docs[0].userInfo.birthday,
-				region: docs[0].userInfo.region,
 			},
 		});
 	});
@@ -111,8 +110,8 @@ const weChatSignIn = async (ctx, next) => {
 // 获取 openid
 const getOpenId = code => {
 	return new Promise((resolve, reject) => {
-		const id = 'wx6c8305cda951f17a'; // AppID(小程序ID)
-		const secret = '570a62dd7848629d2c6e49bacea97682'; // AppSecret(小程序密钥)
+		const id = 'wx3605ab544a17816b'; // AppID(小程序ID)
+		const secret = '90b17566cc9012676c8184e47e82d0db'; // AppSecret(小程序密钥)
 		let url = `https://api.weixin.qq.com/sns/jscode2session?appid=${id}&secret=${secret}&js_code=${code}&grant_type=authorization_code`;
 		request(url, (error, response, body) => {
 			if (error) reject(error);
