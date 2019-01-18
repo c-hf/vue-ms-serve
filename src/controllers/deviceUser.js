@@ -7,6 +7,7 @@ const DeviceCategoryItem = require('../models/DeviceCategoryItem');
 
 const mqttClient = require('../middleware/mqttClient');
 const deviceHash = require('../utils/hash');
+const schedule = require('../utils/schedule');
 const getJWTPayload = require('../utils/jsonWebToken').getJWTPayload;
 const APIError = require('../middleware/rest').APIError;
 const setDesiredLog = require('../utils/logKit').setDesiredLog;
@@ -97,6 +98,45 @@ const setDesired = async (ctx, next) => {
 				logType: 'info',
 				desired: reqData.desired,
 			}),
+		]);
+		ctx.rest({ ok: true });
+	} catch (error) {
+		console.log(error);
+		throw new APIError('device: database_error', `系统未知错误`);
+	}
+};
+
+// 设置定时任务
+const setDeviceTimedTask = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: set_device_timed_task_unknown_error',
+			`系统未知错误`
+		);
+	}
+	try {
+		const timedTaskId = getId(15);
+		await Promise.all([
+			schedule.setTimedTask({
+				userId: payload.userId,
+				groupId: payload.groupId,
+				deviceId: reqData.deviceId,
+				timedTaskId: timedTaskId,
+				time: reqData.time,
+				desired: reqData.desired,
+			}),
+			// setDesiredLog({
+			// 	logId: desiredId,
+			// 	groupId: payload.groupId,
+			// 	deviceId: reqData.deviceId,
+			// 	source: 'User',
+			// 	logType: 'info',
+			// 	desired: reqData.desired,
+			// }),
 		]);
 		ctx.rest({ ok: true });
 	} catch (error) {
@@ -394,6 +434,8 @@ module.exports = {
 	'POST /api/device/setDevice': setDevice,
 	// 操作设备
 	'POST /api/device/setDesired': setDesired,
+	// 设置定时任务
+	'POST /api/device/setDeviceTimedTask': setDeviceTimedTask,
 
 	// 更新设备参数
 	'PUT /api/device/updateDevice': updateDevice,
