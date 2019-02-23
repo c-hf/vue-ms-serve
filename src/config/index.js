@@ -4,7 +4,7 @@ module.exports = {
 	reIssueTime: 30 * 60, // 重新签发时间
 	staticPath: '/src/assets', // 静态资源路径
 	imgUrlPath: '/src/assets/static/avatar',
-	imgUrl: 'http://10.10.72.4:3000/static/avatar/',
+	imgUrl: 'http://localhost:3000/static/avatar/',
 
 	nodemailer: {
 		host: 'smtp.qq.com',
@@ -26,13 +26,6 @@ module.exports = {
 		subject: '',
 		// html: '',
 		html: '',
-	},
-
-	source: {
-		User: '控制台',
-		WeChat: '小程序',
-		Voice: '语音',
-		Device: '设备',
 	},
 
 	logKeyWord: {

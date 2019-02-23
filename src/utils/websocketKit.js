@@ -35,6 +35,7 @@ const pullIo = () => {
 	});
 };
 
+// 获取设备信息
 const getDevices = groupId => {
 	return Device.aggregate([
 		{
@@ -99,6 +100,7 @@ const getDevices = groupId => {
 		});
 };
 
+// 获取房间信息
 const getRooms = groupId => {
 	return House.findOne({ groupId: groupId })
 		.then(docs => {
@@ -111,6 +113,7 @@ const getRooms = groupId => {
 		});
 };
 
+// 获取群组信息
 const getGroup = groupId => {
 	return UserGroup.findOne({ groupId: groupId })
 		.then(docs => {

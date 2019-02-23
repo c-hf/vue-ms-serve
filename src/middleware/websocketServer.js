@@ -7,8 +7,10 @@ const init = () => {
 		console.log(`  --> SOCKET connection - Client.id: ${socket.id}`);
 		try {
 			const payload = jsonWebToken.getJWTPayload(
-				`Bearer ${socket.request._query.token}`
+				`Bearer ${socket.handshake.query.token}`
 			);
+			// console.log(socket.handshake);
+			// console.log(socket.request);
 			if (payload.groupId.length) {
 				websocketKit.getDevices(payload.groupId, socket).then(docs => {
 					socket.emit('deviceList', docs);
@@ -22,6 +24,7 @@ const init = () => {
 			}
 
 			// join room
+			socket.join(payload.userId);
 			socket.join(payload.groupId);
 
 			// 断开连接
@@ -38,7 +41,7 @@ const init = () => {
 				console.log(error);
 			});
 		} catch (error) {
-			console.log('SOCKET：', error.message);
+			console.log('SOCKET: ', error.message);
 		}
 	});
 };

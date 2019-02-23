@@ -1,5 +1,6 @@
 const DeviceStatus = require('../models/DeviceStatus');
 const setOnlineLog = require('../utils/logKit').setOnlineLog;
+const canclAllTimedTask = require('../utils/schedule').canclAllTimedTask;
 
 // 更新数据库
 const updateStatus = async (deviceId, payload) => {
@@ -42,6 +43,7 @@ const setOnline = (deviceId, onLine) => {
 			let logType = 'info';
 			if (!onLine) {
 				logType = 'warn';
+				canclAllTimedTask(deviceId);
 			}
 			setOnlineLog({
 				groupId: docs.groupId,

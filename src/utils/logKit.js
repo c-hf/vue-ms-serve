@@ -29,9 +29,10 @@ const setLog = data => {
 module.exports = {
 	// 添加操作日志
 	setDesiredLog: data => {
+		data.message = '';
 		Object.keys(data.desired).forEach(key => {
 			if (logKeyWord[key]) {
-				data.message = `${logKeyWord[key]}${
+				data.message = `${data.message} ${logKeyWord[key]}${
 					logKeyWord[data.desired[key]]
 				}`;
 			}

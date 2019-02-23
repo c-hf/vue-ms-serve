@@ -4,6 +4,7 @@ const DeviceParam = require('../models/DeviceParam');
 const DeviceAttr = require('../models/DeviceAttr');
 const DeviceStatus = require('../models/DeviceStatus');
 const DeviceCategoryItem = require('../models/DeviceCategoryItem');
+const DeviceTimedTask = require('../models/DeviceTimedTask');
 
 const mqttClient = require('../middleware/mqttClient');
 const deviceHash = require('../utils/hash');
@@ -122,6 +123,7 @@ const setDeviceTimedTask = async (ctx, next) => {
 		const timedTaskId = getId(15);
 		await Promise.all([
 			schedule.setTimedTask({
+				name: reqData.name,
 				userId: payload.userId,
 				groupId: payload.groupId,
 				deviceId: reqData.deviceId,
@@ -137,8 +139,9 @@ const setDeviceTimedTask = async (ctx, next) => {
 			// 	logType: 'info',
 			// 	desired: reqData.desired,
 			// }),
-		]);
-		ctx.rest({ ok: true });
+		]).then(docs => {
+			ctx.rest(docs[0]);
+		});
 	} catch (error) {
 		console.log(error);
 		throw new APIError('device: database_error', `系统未知错误`);
@@ -186,6 +189,146 @@ const updateDevice = async (ctx, next) => {
 			'设备不存在，请重试'
 		);
 	}
+};
+
+// 取消定时
+const canclDeviceTimedTask = async (ctx, next) => {
+	const reqData = ctx.request.body;
+	if (!reqData) {
+		throw new APIError(
+			'device: cancl_device_timed_task_unknown_error',
+			'系统未知错误'
+		);
+	}
+
+	await Promise.all([
+		DeviceTimedTask.updateOne(
+			{
+				timedTaskId: reqData.timedTaskId,
+			},
+			{
+				perform: false,
+			}
+		),
+		schedule.canclTimedTask(reqData.timedTaskId),
+	])
+		.then(docs => {
+			if (docs[1]) {
+				ctx.rest({
+					ok: true,
+				});
+			}
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError(
+				'device: cancl_device_timed_task_failed',
+				'取消定时失败'
+			);
+		});
+};
+
+// 开始定时
+const startDeviceTimedTask = async (ctx, next) => {
+	const reqData = ctx.request.body;
+	if (!reqData) {
+		throw new APIError(
+			'device: start_device_timed_task_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	const docs = await DeviceTimedTask.findOne({
+		timedTaskId: reqData.timedTaskId,
+	}).catch(error => {
+		console.log(error);
+		throw new APIError('device: database_error', '系统未知错误');
+	});
+
+	if (!docs) {
+		ctx.rest({
+			ok: false,
+		});
+	}
+	try {
+		const executeTime = await schedule.startTimedTask(docs);
+		await DeviceTimedTask.updateOne(
+			{
+				timedTaskId: reqData.timedTaskId,
+			},
+			{
+				perform: true,
+				executeTime: executeTime,
+			}
+		).then(() => {
+			ctx.rest({
+				executeTime: executeTime,
+			});
+		});
+	} catch (error) {
+		console.log(error);
+		throw new APIError(
+			'device: start_device_timed_task_failed',
+			'开始定时失败'
+		);
+	}
+};
+
+// 重置定时任务
+const updateDeviceTimedTask = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_timed_task_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	const canclTask = schedule.canclTimedTask(reqData.timedTaskId);
+	if (!canclTask) {
+		throw new APIError('device: database_error', '系统未知错误');
+	}
+
+	const executeTime = schedule.startTimedTask({
+		name: reqData.name,
+		userId: payload.userId,
+		groupId: payload.groupId,
+		deviceId: reqData.deviceId,
+		timedTaskId: reqData.timedTaskId,
+		time: reqData.time,
+		desired: reqData.desired,
+	});
+	await DeviceTimedTask.updateOne(
+		{
+			timedTaskId: reqData.timedTaskId,
+		},
+		{
+			timedTaskId: reqData.timedTaskId,
+			name: reqData.name,
+			time: reqData.time,
+			executeTime: executeTime,
+			desired: reqData.desired,
+			perform: true,
+			finish: false,
+		}
+	)
+		.then(docs => {
+			if (docs.ok) {
+				ctx.rest({
+					executeTime: executeTime,
+				});
+			}
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError(
+				'device: update_device_timed_task_unknown_error',
+				'系统未知错误'
+			);
+		});
 };
 
 // delete
@@ -236,6 +379,33 @@ const deleteDeviceLog = async (ctx, next) => {
 	await DeviceLog.deleteMany({ deviceId: reqData.deviceId })
 		.then(docs => {
 			if (docs.ok) {
+				ctx.rest({ ok: true });
+			} else {
+				ctx.rest({ ok: false });
+			}
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+};
+
+// 删除定时任务
+const deleteDeviceTimedTask = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: delete_device_timed_task_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await Promise.all([
+		DeviceTimedTask.deleteOne({ timedTaskId: reqData.timedTaskId }),
+		schedule.canclTimedTask(reqData.timedTaskId),
+	])
+		.then(docs => {
+			if (docs[0].ok && docs[1]) {
 				ctx.rest({ ok: true });
 			} else {
 				ctx.rest({ ok: false });
@@ -379,6 +549,64 @@ const getDeviceLogById = async (ctx, next) => {
 	ctx.rest(docs);
 };
 
+// 获取设备定时任务
+const getDeviceTimedTask = async (ctx, next) => {
+	const [payload, reqData] = [
+		getJWTPayload(ctx.headers.authorization),
+		ctx.request.query,
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: get_device_log_by_id_unknown_error',
+			`系统未知错误`
+		);
+	}
+	await DeviceTimedTask.find({
+		deviceId: reqData.deviceId,
+		userId: payload.userId,
+		scenarioMode: false,
+	})
+		.then(docs => {
+			ctx.rest(docs);
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError(
+				'device: get_device_timed_task_by_id_unknown_error',
+				`系统未知错误`
+			);
+		});
+};
+
+// 获取定时任务
+const getDeviceTimedTaskById = async (ctx, next) => {
+	const [payload, reqData] = [
+		getJWTPayload(ctx.headers.authorization),
+		ctx.request.query,
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: get_device_log_by_id_unknown_error',
+			`系统未知错误`
+		);
+	}
+	await DeviceTimedTask.findOne({
+		timedTaskId: reqData.timedTaskId,
+		userId: payload.userId,
+		scenarioMode: false,
+	})
+		.then(docs => {
+			ctx.rest(docs);
+		})
+		.catch(error => {
+			console.log(error);
+			throw new APIError(
+				'device: get_device_timed_task_by_id_unknown_error',
+				`系统未知错误`
+			);
+		});
+};
+
 // 获取设备 Id
 const getDeviceId = async (ctx, next) => {
 	const payload = getJWTPayload(ctx.headers.authorization);
@@ -439,11 +667,19 @@ module.exports = {
 
 	// 更新设备参数
 	'PUT /api/device/updateDevice': updateDevice,
+	// 取消定时
+	'PUT /api/device/canclDeviceTimedTask': canclDeviceTimedTask,
+	// 开始定时
+	'PUT /api/device/startDeviceTimedTask': startDeviceTimedTask,
+	// 重置定时任务
+	'PUT /api/device/updateDeviceTimedTask': updateDeviceTimedTask,
 
 	// 删除设备
 	'DELETE /api/device/deleteDevice': deleteDevice,
 	// 删除日志
 	'DELETE /api/device/deleteDeviceLog': deleteDeviceLog,
+	// 删除定时任务
+	'DELETE /api/device/deleteDeviceTimedTask': deleteDeviceTimedTask,
 
 	// 获取设备参数与属性
 	'GET /api/device/getDeviceParamAndAttrById': getDeviceParamAndAttrById,
@@ -453,6 +689,10 @@ module.exports = {
 	'GET /api/device/getAllDeviceInfo': getAllDeviceInfo,
 	// 获取设备日志
 	'GET /api/device/getDeviceLogById': getDeviceLogById,
+	// 获取定时任务
+	'GET /api/device/getDeviceTimedTask': getDeviceTimedTask,
+	// 获取定时任务
+	'GET /api/device/getDeviceTimedTaskById': getDeviceTimedTaskById,
 	// 获取设备 Id
 	'GET /api/device/getDeviceId': getDeviceId,
 };

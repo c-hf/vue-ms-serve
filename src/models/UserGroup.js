@@ -8,18 +8,9 @@ const userGroupSchema = new Schema(
 		groupName: String, // 分组名
 		ownerId: String, // 拥有者 Id
 		// 所在地
-		region: [
-			{
-				adcode: String,
-				name: String,
-			},
-		],
+		region: [Object],
 		// 成员
-		member: [
-			{
-				userId: String,
-			},
-		],
+		member: [Object],
 		createTime: {
 			type: Date,
 			default: Date.now,

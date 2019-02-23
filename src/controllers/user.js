@@ -3,6 +3,7 @@ const UserInfo = require('../models/UserInfo');
 const UserRole = require('../models/UserRole');
 const UserGroup = require('../models/UserGroup');
 const House = require('../models/House');
+const Message = require('../models/Message');
 const VerificationCode = require('../models/VerificationCode');
 
 const sendEmail = require('../utils/email');
@@ -80,7 +81,6 @@ const sendCode = async (ctx, next) => {
 			}
 		})
 		.then(docs => {
-			// console.log(docs);
 			if (docs) {
 				VerificationCode.deleteOne({ id: reqData.id });
 			}
@@ -92,7 +92,7 @@ const sendCode = async (ctx, next) => {
 			}).save();
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('sign: mail_unknown_error', `系统未知错误`);
 		})
 		.then(() => {
@@ -198,7 +198,7 @@ const signUp = async (ctx, next) => {
 			});
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('sign: unknown_error', `系统未知错误`);
 		});
 };
@@ -215,7 +215,7 @@ const signIn = async (ctx, next) => {
 			return docs;
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('sign: database_error', `系统未知错误`);
 		})
 		.then(docs => {
@@ -250,7 +250,6 @@ const signIn = async (ctx, next) => {
 					intro: docs[0].userInfo.intro,
 					sex: docs[0].userInfo.sex,
 					birthday: docs[0].userInfo.birthday,
-					region: docs[0].userInfo.region,
 				},
 			});
 		});
@@ -283,7 +282,7 @@ const setUserAvatar = async (ctx, next) => {
 			url: `${imgUrl}${name}.${suffix[suffix.length - 1]}`,
 		});
 	} catch (error) {
-		console.log(error);
+		console.log(error.message);
 		throw new APIError(
 			'user: set_user_avatar_unknown_error',
 			`系统未知错误`
@@ -377,8 +376,46 @@ const perfectInformation = async (ctx, next) => {
 			});
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('sign: unknown_error', `系统未知错误`);
+		});
+};
+
+// put
+// 更新用户信息
+const updateUserInfo = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		jsonWebToken.getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'user: update_user_info_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await UserInfo.findOneAndUpdate(
+		{
+			userId: payload.userId,
+		},
+		{
+			nickName: reqData.nickName,
+			intro: reqData.intro,
+			avatar: reqData.avatar,
+			sex: reqData.sex,
+			birthday: reqData.birthday,
+		},
+		{
+			new: true,
+		}
+	)
+		.then(docs => {
+			ctx.rest(docs);
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('user: database_error', `系统未知错误`);
 		});
 };
 
@@ -414,7 +451,7 @@ const getUserAvatar = async (ctx, next) => {
 			return docs;
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('sign: database_error', `系统未知错误`);
 		})
 		.then(docs => {
@@ -450,7 +487,7 @@ const getUserInfo = async (ctx, next) => {
 			});
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('user: database_error', `系统未知错误`);
 		});
 };
@@ -464,11 +501,11 @@ const getUserById = async (ctx, next) => {
 	query[reqData.type] = reqData.id;
 	await UserFind(query)
 		.then(docs => {
-			// console.log(docs);
-			if (!docs[0].userId) {
+			if (!docs.length) {
 				ctx.rest({
 					ok: false,
 				});
+				return;
 			}
 			ctx.rest({
 				ok: true,
@@ -478,11 +515,12 @@ const getUserById = async (ctx, next) => {
 					avatar: docs[0].userInfo.avatar,
 					intro: docs[0].userInfo.intro,
 					sex: docs[0].userInfo.sex,
+					birthday: docs[0].userInfo.birthday,
 				},
 			});
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('user: database_error', `系统未知错误`);
 		});
 };
@@ -514,8 +552,6 @@ const UserFind = query => {
 module.exports = {
 	// 验证码
 	'POST /api/user/sendCode': sendCode,
-	// 头像
-	'GET /api/user/getUserAvatar': getUserAvatar,
 	// 注册
 	'POST /api/user/signUp': signUp,
 	// 登录
@@ -525,10 +561,15 @@ module.exports = {
 	// 完善信息
 	'POST /api/user/perfectInformation': perfectInformation,
 
+	// 更新用户信息
+	'PUT /api/user/updateUserInfo': updateUserInfo,
+
 	// 登出
 	'GET /api/user/signOut': signOut,
-	// 获取 user info
+	// 获取头像
+	'GET /api/user/getUserAvatar': getUserAvatar,
+	// 获取用户信息
 	'GET /api/user/getUserInfo': getUserInfo,
-	// 查找 user byId
+	// 查找用户信息 byId
 	'GET /api/user/getUserById': getUserById,
 };
