@@ -3,7 +3,6 @@ const UserInfo = require('../models/UserInfo');
 const UserRole = require('../models/UserRole');
 const UserGroup = require('../models/UserGroup');
 const House = require('../models/House');
-const Message = require('../models/Message');
 const VerificationCode = require('../models/VerificationCode');
 
 const sendEmail = require('../utils/email');
@@ -11,6 +10,7 @@ const signHash = require('../utils/hash');
 const getCode = require('../utils/code');
 const jsonWebToken = require('../utils/jsonWebToken');
 const getId = require('../utils/getId');
+const getMessageId = require('../utils/getMessageId');
 
 // Error 对象
 const APIError = require('../middleware/rest').APIError;
@@ -321,9 +321,9 @@ const perfectInformation = async (ctx, next) => {
 			},
 			{
 				groupId: groupId,
-				avatar: reqData.personalData.avatar,
-				sex: reqData.personalData.sex,
-				birthday: reqData.personalData.birthday,
+				avatar: reqData.userData.avatar,
+				sex: reqData.userData.sex,
+				birthday: reqData.userData.birthday,
 			},
 			{
 				new: true,
@@ -332,8 +332,8 @@ const perfectInformation = async (ctx, next) => {
 		new UserGroup({
 			groupId: groupId,
 			ownerId: payload.userId,
-			groupName: reqData.householdGroupData.groupName,
-			region: reqData.householdGroupData.region,
+			groupName: reqData.groupData.groupName,
+			region: reqData.groupData.region,
 			member: [
 				{
 					userId: payload.userId,
@@ -525,6 +525,40 @@ const getUserById = async (ctx, next) => {
 		});
 };
 
+// 获取 Token
+const getUserToken = async (ctx, next) => {
+	const payload = jsonWebToken.getJWTPayload(ctx.headers.authorization);
+	if (!payload) {
+		throw new APIError('user: get_user_unknown_error', `系统未知错误`);
+	}
+
+	await UserInfo.findOne({
+		userId: payload.userId,
+	})
+		.then(docs => {
+			const jwToken = jsonWebToken.getToken({
+				userId: docs.userId,
+				groupId: docs.groupId,
+			});
+			ctx.rest({
+				token: jwToken,
+				userInfo: {
+					userId: docs.userId,
+					groupId: docs.groupId,
+					nickName: docs.nickName,
+					avatar: docs.avatar,
+					intro: docs.intro,
+					sex: docs.sex,
+					birthday: docs.birthday,
+				},
+			});
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('user: database_error', `系统未知错误`);
+		});
+};
+
 // 用户查询
 const UserFind = query => {
 	return User.aggregate([
@@ -572,4 +606,6 @@ module.exports = {
 	'GET /api/user/getUserInfo': getUserInfo,
 	// 查找用户信息 byId
 	'GET /api/user/getUserById': getUserById,
+	// 获取 Token
+	'GET /api/user/getUserToken': getUserToken,
 };

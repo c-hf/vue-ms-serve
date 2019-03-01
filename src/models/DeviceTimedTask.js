@@ -4,7 +4,7 @@ const Schema = mongoose.Schema;
 // 定义schema
 const DeviceTimedTaskSchema = new Schema(
 	{
-		timedTaskId: String, // 任务ID\
+		timedTaskId: String, // 任务ID
 		name: String, // 任务名称
 		groupId: String,
 		userId: String,

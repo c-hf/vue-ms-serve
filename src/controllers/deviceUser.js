@@ -3,6 +3,7 @@ const DeviceLog = require('../models/DeviceLog');
 const DeviceParam = require('../models/DeviceParam');
 const DeviceAttr = require('../models/DeviceAttr');
 const DeviceStatus = require('../models/DeviceStatus');
+const DeviceCategory = require('../models/DeviceCategory');
 const DeviceCategoryItem = require('../models/DeviceCategoryItem');
 const DeviceTimedTask = require('../models/DeviceTimedTask');
 
@@ -13,16 +14,20 @@ const getJWTPayload = require('../utils/jsonWebToken').getJWTPayload;
 const APIError = require('../middleware/rest').APIError;
 const setDesiredLog = require('../utils/logKit').setDesiredLog;
 const getId = require('../utils/getId');
+const getMessageId = require('../utils/getMessageId');
 
 // set
 // 添加设备
 const setDevice = async (ctx, next) => {
-	const reqData = ctx.request.body;
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
 	if (!reqData) {
 		throw new APIError('device: set_device_unknown_error', `系统未知错误`);
 	}
 
-	await Promise.all([
+	const docs = await Promise.all([
 		new Device({
 			groupId: reqData.groupId,
 			roomId: reqData.roomId,
@@ -40,38 +45,81 @@ const setDevice = async (ctx, next) => {
 			onLine: false,
 			status: reqData.status,
 		}).save(),
-		DeviceCategoryItem.findOne({ categoryItemId: reqData.categoryItemId }),
-	])
-		.then(docs => {
-			const resData = {
-				device: {
-					groupId: docs[0].groupId,
-					roomId: docs[0].roomId,
-					deviceId: docs[0].deviceId,
-					categoryId: docs[2].categoryId,
-					categoryItemId: docs[0].categoryItemId,
-					categoryItemName: docs[2].name,
-					name: docs[0].name,
-					desc: docs[0].desc,
-					networking: docs[0].networking,
-					os: docs[0].os,
-					protocol: docs[0].protocol,
-					onLine: docs[1].onLine,
-					createTime: docs[0].createTime,
-					updateTime: docs[1].updateTime,
+		DeviceCategoryItem.aggregate([
+			{
+				$match: { categoryItemId: reqData.categoryItemId },
+			},
+			{
+				$lookup: {
+					from: 'deviceCategorys',
+					localField: 'categoryId',
+					foreignField: 'categoryId',
+					as: 'categoryInfo',
 				},
-				status: docs[1].status,
-			};
+			},
+			{
+				$unwind: {
+					path: '$categoryInfo',
+					preserveNullAndEmptyArrays: true,
+				},
+			},
+		]),
+	]).catch(error => {
+		console.log(error.message);
+		throw new APIError('device: database_error', `系统未知错误`);
+	});
 
-			io.to(reqData.groupId).emit('addDevice', resData);
-			ctx.rest({
-				ok: true,
-			});
-		})
-		.catch(error => {
-			console.log(error);
-			throw new APIError('device: database_error', `系统未知错误`);
-		});
+	const resData = {
+		device: {
+			groupId: docs[0].groupId,
+			roomId: docs[0].roomId,
+			deviceId: docs[0].deviceId,
+			categoryId: docs[2][0].categoryId,
+			categoryName: docs[2][0].categoryInfo.name,
+			categoryItemId: docs[0].categoryItemId,
+			categoryItemName: docs[2][0].name,
+			name: docs[0].name,
+			desc: docs[0].desc,
+			networking: docs[0].networking,
+			os: docs[0].os,
+			protocol: docs[0].protocol,
+			onLine: docs[1].onLine,
+			createTime: docs[0].createTime,
+			updateTime: docs[1].updateTime,
+		},
+		status: docs[1].status,
+	};
+	// const messageId = getMessageId();
+	// const [message, relation] = [
+	// 	{
+	// 		messageId: messageId,
+	// 		category: 'DEVICE',
+	// 		type: 'INFO',
+	// 		title: '添加设备通知',
+	// 		content: '添加了新设备',
+	// 		sender: 'system',
+	// 		operation: {
+	// 			deviceType: 'add',
+	// 			userId: payload.userId,
+	// 			deviceId: reqData.deviceId,
+	// 			name: reqData.name,
+	// 			operation: false,
+	// 		},
+	// 	},
+	// 	{
+	// 		messageId: messageId,
+	// 		userId: reqData.sourceId,
+	// 		status: 'UNREAD',
+	// 	},
+	// ];
+
+	io.to(reqData.groupId).emit('updateDevices', {
+		type: 'add',
+		data: resData,
+	});
+	ctx.rest({
+		ok: true,
+	});
 };
 
 // 操作设备
@@ -80,9 +128,11 @@ const setDesired = async (ctx, next) => {
 		ctx.request.body,
 		getJWTPayload(ctx.headers.authorization),
 	];
+
 	if (!reqData) {
 		throw new APIError('device: set_desired_unknown_error', `系统未知错误`);
 	}
+
 	try {
 		const desiredId = getId(15);
 		await Promise.all([
@@ -102,7 +152,7 @@ const setDesired = async (ctx, next) => {
 		]);
 		ctx.rest({ ok: true });
 	} catch (error) {
-		console.log(error);
+		console.log(error.message);
 		throw new APIError('device: database_error', `系统未知错误`);
 	}
 };
@@ -143,7 +193,7 @@ const setDeviceTimedTask = async (ctx, next) => {
 			ctx.rest(docs[0]);
 		});
 	} catch (error) {
-		console.log(error);
+		console.log(error.message);
 		throw new APIError('device: database_error', `系统未知错误`);
 	}
 };
@@ -159,30 +209,48 @@ const updateDevice = async (ctx, next) => {
 		);
 	}
 
+	await Device.findOne({
+		deviceId: reqData.deviceId,
+	}).then(docs => {
+		if (docs === null) {
+			throw new APIError(
+				'device: update_device_failed',
+				'设备不存在，请重试'
+			);
+		}
+	});
+
 	const docs = await Device.findOneAndUpdate(
 		{
 			deviceId: reqData.deviceId,
 		},
-		reqData.data,
+		reqData,
 		{
 			new: true,
 		}
 	).catch(error => {
-		console.log(error);
+		console.log(error.message);
 		throw new APIError('device: update_device_failed', '更新失败');
 	});
-	if (docs) {
-		ctx.rest({
+
+	if (docs.deviceId) {
+		const resData = {
 			groupId: docs.groupId,
 			roomId: docs.roomId,
-			categoryItemId: docs.categoryItemId,
 			deviceId: docs.deviceId,
+			categoryItemName: reqData.categoryItemName,
+			categoryItemId: docs.categoryItemId,
 			name: docs.name,
 			desc: docs.desc,
 			os: docs.os,
 			networking: docs.networking,
 			protocol: docs.protocol,
+		};
+		io.to(docs.groupId).emit('updateDevices', {
+			type: 'update',
+			data: resData,
 		});
+		ctx.rest(resData);
 	} else {
 		throw new APIError(
 			'device: update_device_failed',
@@ -220,7 +288,7 @@ const canclDeviceTimedTask = async (ctx, next) => {
 			}
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError(
 				'device: cancl_device_timed_task_failed',
 				'取消定时失败'
@@ -241,15 +309,17 @@ const startDeviceTimedTask = async (ctx, next) => {
 	const docs = await DeviceTimedTask.findOne({
 		timedTaskId: reqData.timedTaskId,
 	}).catch(error => {
-		console.log(error);
+		console.log(error.message);
 		throw new APIError('device: database_error', '系统未知错误');
 	});
 
-	if (!docs) {
-		ctx.rest({
-			ok: false,
-		});
+	if (docs === null) {
+		throw new APIError(
+			'device: start_device_timed_task_failed',
+			`定时任务不存在，请重试`
+		);
 	}
+
 	try {
 		const executeTime = await schedule.startTimedTask(docs);
 		await DeviceTimedTask.updateOne(
@@ -266,7 +336,7 @@ const startDeviceTimedTask = async (ctx, next) => {
 			});
 		});
 	} catch (error) {
-		console.log(error);
+		console.log(error.message);
 		throw new APIError(
 			'device: start_device_timed_task_failed',
 			'开始定时失败'
@@ -323,7 +393,7 @@ const updateDeviceTimedTask = async (ctx, next) => {
 			}
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError(
 				'device: update_device_timed_task_unknown_error',
 				'系统未知错误'
@@ -345,25 +415,49 @@ const deleteDevice = async (ctx, next) => {
 			`系统未知错误`
 		);
 	}
-	await Promise.all([
-		Device.deleteOne({
-			groupId: payload.groupId,
+
+	await Device.findOne({
+		deviceId: reqData.deviceId,
+	}).then(docs => {
+		if (docs === null) {
+			throw new APIError(
+				'device: delete_device_failed',
+				'设备不存在，请重试'
+			);
+		}
+	});
+
+	try {
+		const timedTasks = await DeviceTimedTask.find({
 			deviceId: reqData.deviceId,
-		}),
-		DeviceStatus.deleteOne({
-			deviceId: reqData.deviceId,
-		}),
-	])
-		.then(docs => {
-			io.to(payload.groupId).emit('deleteDevice', {
-				deviceId: reqData.deviceId,
-			});
-			ctx.rest({ ok: true });
-		})
-		.catch(error => {
-			console.log(error);
-			throw new APIError('device: delete_device_failed', '删除失败');
 		});
+
+		await Promise.all([
+			Device.deleteOne({
+				groupId: payload.groupId,
+				deviceId: reqData.deviceId,
+			}),
+			DeviceStatus.deleteOne({
+				deviceId: reqData.deviceId,
+			}),
+			DeviceTimedTask.deleteMany({
+				deviceId: reqData.deviceId,
+			}),
+			DeviceLog.deleteMany({ deviceId: reqData.deviceId }),
+		]);
+		timedTasks.forEach(el => {
+			schedule.canclTimedTask(el.timedTaskId);
+		});
+
+		io.to(payload.groupId).emit('updateDevices', {
+			type: 'delete',
+			deviceId: reqData.deviceId,
+		});
+		ctx.rest({ ok: true });
+	} catch (error) {
+		console.log(error.message);
+		throw new APIError('device: delete_device_failed', '删除失败');
+	}
 };
 
 // 删除日志
@@ -385,7 +479,7 @@ const deleteDeviceLog = async (ctx, next) => {
 			}
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
 };
@@ -412,7 +506,7 @@ const deleteDeviceTimedTask = async (ctx, next) => {
 			}
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
 };
@@ -466,7 +560,59 @@ const getAllDeviceInfo = async (ctx, next) => {
 			ctx.rest(docs);
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+};
+
+// 获取设备信息
+const getDeviceInfo = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: get_all_device_info_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await Device.aggregate([
+		{
+			$match: { deviceId: reqData.deviceId },
+		},
+		{
+			$lookup: {
+				from: 'deviceCategoryItems',
+				localField: 'categoryItemId',
+				foreignField: 'categoryItemId',
+				as: 'categoryItem',
+			},
+		},
+		{
+			$unwind: {
+				path: '$categoryItem', // 拆分子数组
+				preserveNullAndEmptyArrays: true, // 空的数组也拆分
+			},
+		},
+	])
+		.then(docs => {
+			if (docs[0].deviceId) {
+				ctx.rest({
+					groupId: docs[0].groupId,
+					deviceId: docs[0].deviceId,
+					name: docs[0].name,
+					roomId: docs[0].roomId,
+					categoryItemName: docs[0].categoryItem.name,
+					desc: docs[0].desc,
+					networking: docs[0].networking,
+					os: docs[0].os,
+					protocol: docs[0].protocol,
+				});
+			} else {
+				ctx.rest({ ok: false });
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
 };
@@ -494,7 +640,7 @@ const getDeviceParamAndAttrById = async (ctx, next) => {
 			});
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
 };
@@ -516,7 +662,7 @@ const getDeviceAttrById = async (ctx, next) => {
 			ctx.rest(docs.attr);
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
 };
@@ -531,7 +677,7 @@ const getDeviceLogById = async (ctx, next) => {
 		);
 	}
 	let docs = await getLogs(reqData).catch(error => {
-		console.log(error);
+		console.log(error.message);
 		throw new APIError('device: database_error', `系统未知错误`);
 	});
 
@@ -542,7 +688,7 @@ const getDeviceLogById = async (ctx, next) => {
 			.sort({ _id: -1 })
 			.limit(5)
 			.catch(error => {
-				console.log(error);
+				console.log(error.message);
 				throw new APIError('device: database_error', `系统未知错误`);
 			});
 	}
@@ -570,7 +716,7 @@ const getDeviceTimedTask = async (ctx, next) => {
 			ctx.rest(docs);
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError(
 				'device: get_device_timed_task_by_id_unknown_error',
 				`系统未知错误`
@@ -599,7 +745,7 @@ const getDeviceTimedTaskById = async (ctx, next) => {
 			ctx.rest(docs);
 		})
 		.catch(error => {
-			console.log(error);
+			console.log(error.message);
 			throw new APIError(
 				'device: get_device_timed_task_by_id_unknown_error',
 				`系统未知错误`
@@ -687,6 +833,8 @@ module.exports = {
 	'GET /api/device/getDeviceAttrById': getDeviceAttrById,
 	// 获取 groupId 下所有的设备信息
 	'GET /api/device/getAllDeviceInfo': getAllDeviceInfo,
+	// 获取设备信息
+	'GET /api/device/getDeviceInfo': getDeviceInfo,
 	// 获取设备日志
 	'GET /api/device/getDeviceLogById': getDeviceLogById,
 	// 获取定时任务

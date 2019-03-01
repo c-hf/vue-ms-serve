@@ -6,6 +6,18 @@ const jsonWebToken = require('../utils/jsonWebToken');
 // Error 对象
 const APIError = require('../middleware/rest').APIError;
 
+// 获取未读消息数
+const messageUnreadNum = async userId => {
+	const total = await MessageRelation.find({
+		userId: userId,
+		status: 'UNREAD',
+	}).countDocuments();
+
+	io.to(userId).emit('message', {
+		total: total,
+	});
+};
+
 // post
 // 查找消息
 const getMessages = async (ctx, next) => {
@@ -29,16 +41,16 @@ const getMessages = async (ctx, next) => {
 			? (query['message.category'] = reqData.query[el])
 			: (query[el] = reqData.query[el]);
 	});
-	console.log(query);
+
 	await Promise.all([
 		messagesFind(query).group({
 			_id: null,
 			count: { $sum: 1 },
 		}),
 		messagesFind(query)
+			.sort({ _id: -1 })
 			.skip(Number(reqData.pageNo) * Number(reqData.pageSize))
-			.limit(Number(reqData.pageSize))
-			.sort({ _id: -1 }),
+			.limit(Number(reqData.pageSize)),
 	])
 		.then(docs => {
 			if (docs.length && docs[1].length) {
@@ -96,9 +108,9 @@ const getSearchMessages = async (ctx, next) => {
 			count: { $sum: 1 },
 		}),
 		messagesFind(query)
+			.sort({ _id: -1 })
 			.skip(Number(reqData.pageNo) * Number(reqData.pageSize))
-			.limit(Number(reqData.pageSize))
-			.sort({ _id: -1 }),
+			.limit(Number(reqData.pageSize)),
 	])
 		.then(docs => {
 			if (docs.length && docs[1].length) {
@@ -118,18 +130,32 @@ const getSearchMessages = async (ctx, next) => {
 
 // 删除消息
 const deleteMessage = async (ctx, next) => {
-	const reqData = ctx.request.body;
+	const [reqData, payload] = [
+		ctx.request.body,
+		jsonWebToken.getJWTPayload(ctx.headers.authorization),
+	];
 	if (!reqData) {
 		throw new APIError('group: get_group_unknown_error', `系统未知错误`);
 	}
 
 	try {
-		reqData.forEach(async el => {
-			await MessageRelation.deleteOne({
-				messageId: el,
-			});
+		await MessageRelation.deleteMany(
+			{
+				messageId: {
+					$in: reqData,
+				},
+			},
+			{
+				status: 'READ',
+			}
+		);
+		const total = await MessageRelation.find({
+			userId: payload.userId,
+			status: 'UNREAD',
+		}).countDocuments();
+		io.to(payload.userId).emit('message', {
+			total: total,
 		});
-
 		ctx.rest({
 			ok: true,
 		});
@@ -142,7 +168,10 @@ const deleteMessage = async (ctx, next) => {
 // put
 // 设为已读
 const updateMessageStatus = async (ctx, next) => {
-	let reqData = ctx.request.body;
+	const [reqData, payload] = [
+		ctx.request.body,
+		jsonWebToken.getJWTPayload(ctx.headers.authorization),
+	];
 	if (!reqData) {
 		throw new APIError(
 			'user: update_message_status_unknown_error',
@@ -151,13 +180,22 @@ const updateMessageStatus = async (ctx, next) => {
 	}
 
 	try {
-		reqData.forEach(async el => {
-			await MessageRelation.updateOne(
-				{ messageId: el },
-				{
-					status: 'READ',
-				}
-			);
+		await MessageRelation.updateMany(
+			{
+				messageId: {
+					$in: reqData,
+				},
+			},
+			{
+				status: 'READ',
+			}
+		);
+		const total = await MessageRelation.find({
+			userId: payload.userId,
+			status: 'UNREAD',
+		}).countDocuments();
+		io.to(payload.userId).emit('message', {
+			total: total,
 		});
 		ctx.rest({ ok: true });
 	} catch (error) {
@@ -193,7 +231,6 @@ const messagesFind = query => {
 		{
 			$project: {
 				__v: 0,
-				// _id: 0,
 				'message.__v': 0,
 				'message._id': 0,
 			},

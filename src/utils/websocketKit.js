@@ -1,39 +1,7 @@
 const Device = require('../models/Device');
 const UserGroup = require('../models/UserGroup');
-const UserInfo = require('../models/UserInfo');
 const House = require('../models/House');
-
-// userInfo 添加 io
-const pushIo = () => {
-	UserInfo.updateOne(
-		{
-			userId: payload.userId,
-		},
-		{
-			$push: {
-				ioId: socket.id,
-			},
-		}
-	).catch(error => {
-		console.log(error);
-	});
-};
-
-// userInfo 删除 io
-const pullIo = () => {
-	UserInfo.updateOne(
-		{
-			userId: payload.userId,
-		},
-		{
-			$pull: {
-				ioId: socket.id,
-			},
-		}
-	).catch(error => {
-		console.log(error);
-	});
-};
+const MessageRelation = require('../models/MessageRelation');
 
 // 获取设备信息
 const getDevices = groupId => {
@@ -58,6 +26,14 @@ const getDevices = groupId => {
 			},
 		},
 		{
+			$lookup: {
+				from: 'deviceCategorys',
+				localField: 'categoryItemInfo.categoryId',
+				foreignField: 'categoryId',
+				as: 'categoryInfo',
+			},
+		},
+		{
 			$unwind: {
 				path: '$statusInfo',
 				preserveNullAndEmptyArrays: true,
@@ -66,6 +42,12 @@ const getDevices = groupId => {
 		{
 			$unwind: {
 				path: '$categoryItemInfo',
+				preserveNullAndEmptyArrays: true,
+			},
+		},
+		{
+			$unwind: {
+				path: '$categoryInfo',
 				preserveNullAndEmptyArrays: true,
 			},
 		},
@@ -78,7 +60,8 @@ const getDevices = groupId => {
 						groupId: el.groupId,
 						roomId: el.roomId,
 						deviceId: el.deviceId,
-						categoryId: el.categoryItemInfo.categoryId,
+						categoryId: el.categoryInfo.categoryId,
+						categoryName: el.categoryInfo.name,
 						categoryItemId: el.categoryItemId,
 						categoryItemName: el.categoryItemInfo.name,
 						name: el.name,
@@ -96,7 +79,7 @@ const getDevices = groupId => {
 			return resData;
 		})
 		.catch(error => {
-			console.log(error);
+			console.log('websocketKit: ', error.message);
 		});
 };
 
@@ -109,7 +92,7 @@ const getRooms = groupId => {
 			}
 		})
 		.catch(error => {
-			console.log(error);
+			console.log('websocketKit: ', error.message);
 		});
 };
 
@@ -132,14 +115,23 @@ const getGroup = groupId => {
 			return;
 		})
 		.catch(error => {
-			console.log(error);
+			console.log('websocketKit: ', error.message);
 		});
 };
 
+// 获取未读消息数
+const getMessageUnreadNum = async userId => {
+	const total = await MessageRelation.find({
+		userId: userId,
+		status: 'UNREAD',
+	}).countDocuments();
+
+	return total;
+};
+
 module.exports = {
-	pushIo: pushIo,
-	pullIo: pullIo,
 	getDevices: getDevices,
 	getRooms: getRooms,
 	getGroup: getGroup,
+	getMessageUnreadNum: getMessageUnreadNum,
 };

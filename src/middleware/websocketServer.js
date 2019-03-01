@@ -1,31 +1,47 @@
 const jsonWebToken = require('../utils/jsonWebToken');
 const websocketKit = require('../utils/websocketKit');
+const UserInfo = require('../models/UserInfo');
 
 // 初始化
 const init = () => {
-	io.on('connection', socket => {
+	io.on('connection', async socket => {
 		console.log(`  --> SOCKET connection - Client.id: ${socket.id}`);
 		try {
 			const payload = jsonWebToken.getJWTPayload(
 				`Bearer ${socket.handshake.query.token}`
 			);
-			// console.log(socket.handshake);
-			// console.log(socket.request);
-			if (payload.groupId.length) {
-				websocketKit.getDevices(payload.groupId, socket).then(docs => {
-					socket.emit('deviceList', docs);
-				});
-				websocketKit.getGroup(payload.groupId).then(docs => {
-					socket.emit('group', docs);
-				});
-				websocketKit.getRooms(payload.groupId).then(docs => {
-					socket.emit('rooms', docs.rooms);
-				});
-			}
+
+			const userInfo = await UserInfo.findOne({ userId: payload.userId });
 
 			// join room
 			socket.join(payload.userId);
-			socket.join(payload.groupId);
+			socket.join(userInfo.groupId);
+
+			// 初始化信息
+			if (userInfo.groupId.length) {
+				await Promise.all([
+					websocketKit
+						.getDevices(userInfo.groupId, socket)
+						.then(docs => {
+							socket.emit('devices', docs);
+						}),
+					websocketKit.getGroup(userInfo.groupId).then(docs => {
+						socket.emit('group', docs);
+					}),
+					websocketKit.getRooms(userInfo.groupId).then(docs => {
+						socket.emit('rooms', docs.rooms);
+					}),
+				]);
+			}
+
+			// 未读消息数
+			await websocketKit
+				.getMessageUnreadNum(payload.userId)
+				.then(docs => {
+					socket.emit('message', {
+						total: docs,
+					});
+				});
 
 			// 断开连接
 			socket.on('disconnect', reason => {
@@ -36,9 +52,9 @@ const init = () => {
 				);
 			});
 
-			// 发生错误
+			// 错误处理
 			socket.on('error', error => {
-				console.log(error);
+				console.log('SOCKET: ', error.message);
 			});
 		} catch (error) {
 			console.log('SOCKET: ', error.message);
