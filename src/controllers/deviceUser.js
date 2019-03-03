@@ -181,14 +181,6 @@ const setDeviceTimedTask = async (ctx, next) => {
 				time: reqData.time,
 				desired: reqData.desired,
 			}),
-			// setDesiredLog({
-			// 	logId: desiredId,
-			// 	groupId: payload.groupId,
-			// 	deviceId: reqData.deviceId,
-			// 	source: 'User',
-			// 	logType: 'info',
-			// 	desired: reqData.desired,
-			// }),
 		]).then(docs => {
 			ctx.rest(docs[0]);
 		});
@@ -224,7 +216,7 @@ const updateDevice = async (ctx, next) => {
 		{
 			deviceId: reqData.deviceId,
 		},
-		reqData,
+		reqData.data,
 		{
 			new: true,
 		}
@@ -250,7 +242,9 @@ const updateDevice = async (ctx, next) => {
 			type: 'update',
 			data: resData,
 		});
-		ctx.rest(resData);
+		ctx.rest({
+			ok: true,
+		});
 	} else {
 		throw new APIError(
 			'device: update_device_failed',

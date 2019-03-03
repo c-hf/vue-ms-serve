@@ -47,7 +47,7 @@ const createGroup = async (ctx, next) => {
 		}
 	});
 
-	const [groupId, roomId] = [getId(10), getId(3)];
+	const [groupId, roomId] = [getId(10), getId(8)];
 	const jwToken = jsonWebToken.getToken({
 		userId: payload.userId,
 		groupId: groupId,
@@ -82,7 +82,7 @@ const createGroup = async (ctx, next) => {
 				{
 					roomId: roomId,
 					name: '客厅',
-					icon: '',
+					icon: 'icon-shafa',
 				},
 			],
 		}).save(),
@@ -583,7 +583,7 @@ const addRoom = async (ctx, next) => {
 		throw new APIError('group: create_group_unknown_error', `系统未知错误`);
 	}
 
-	const roomId = getId(3);
+	const roomId = getId(8);
 
 	await House.findOneAndUpdate(
 		{ groupId: reqData.groupId },
@@ -595,9 +595,32 @@ const addRoom = async (ctx, next) => {
 					icon: reqData.icon,
 				},
 			},
+		},
+		{
+			new: true,
 		}
 	)
-		.then(docs => {})
+		.then(docs => {
+			if (docs.groupId) {
+				io.to(reqData.groupId).emit('updateRooms', {
+					type: 'add',
+					data: {
+						roomId: roomId,
+						name: reqData.name,
+						icon: reqData.icon,
+					},
+				});
+				ctx.rest({
+					ok: true,
+					name: reqData.name,
+					icon: reqData.icon,
+				});
+			} else {
+				ctx.rest({
+					ok: false,
+				});
+			}
+		})
 		.catch(error => {
 			console.log(error.message);
 			throw new APIError('group: unknown_error', `系统未知错误`);
@@ -738,6 +761,50 @@ const deleteGroupMember = async (ctx, next) => {
 	}
 };
 
+// 删除房间
+const deleteHouse = async (ctx, next) => {
+	const reqData = ctx.request.query;
+
+	if (!reqData) {
+		throw new APIError('group: delete_house_unknown_error', `系统未知错误`);
+	}
+
+	await House.findOneAndUpdate(
+		{
+			groupId: reqData.groupId,
+		},
+		{
+			$pull: {
+				rooms: { roomId: reqData.roomId },
+			},
+		},
+		{
+			new: true,
+		}
+	)
+		.then(docs => {
+			if (docs.groupId) {
+				ctx.rest({
+					ok: true,
+				});
+				io.to(reqData.groupId).emit('updateRooms', {
+					type: 'delete',
+					data: {
+						roomId: reqData.roomId,
+					},
+				});
+			} else {
+				ctx.rest({
+					ok: false,
+				});
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('group: database_error', `系统未知错误`);
+		});
+};
+
 // put
 // 更新群信息
 const updateGroupInfo = async (ctx, next) => {
@@ -775,7 +842,54 @@ const updateGroupInfo = async (ctx, next) => {
 		})
 		.catch(error => {
 			console.log(error.message);
-			throw new APIError('user: database_error', `系统未知错误`);
+			throw new APIError('group: database_error', `系统未知错误`);
+		});
+};
+
+// 更新房间
+const updateHouse = async (ctx, next) => {
+	const reqData = ctx.request.body;
+	if (!reqData) {
+		throw new APIError('user: update_house_unknown_error', `系统未知错误`);
+	}
+
+	await House.findOneAndUpdate(
+		{
+			groupId: reqData.groupId,
+			'rooms.roomId': reqData.roomId,
+		},
+		{
+			$set: {
+				'rooms.$.icon': reqData.icon,
+				'rooms.$.name': reqData.name,
+			},
+		},
+		{
+			new: true,
+		}
+	)
+		.then(docs => {
+			if (docs.groupId) {
+				ctx.rest({
+					ok: true,
+				});
+				io.to(reqData.groupId).emit('updateRooms', {
+					type: 'update',
+					data: {
+						roomId: reqData.roomId,
+						icon: reqData.icon,
+						name: reqData.name,
+					},
+				});
+			} else {
+				ctx.rest({
+					ok: false,
+				});
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('group: database_error', `系统未知错误`);
 		});
 };
 
@@ -830,6 +944,27 @@ const getGroupInfo = async (ctx, next) => {
 		.then(docs => {
 			if (docs) {
 				ctx.rest(docs);
+			} else {
+				ctx.rest({ ok: false });
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('group: database_error', `系统未知错误`);
+		});
+};
+
+// 获取房间信息
+const getHouse = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError('group: get_house_unknown_error', `系统未知错误`);
+	}
+
+	await House.findOne({ groupId: reqData.groupId })
+		.then(docs => {
+			if (docs) {
+				ctx.rest(docs.rooms);
 			} else {
 				ctx.rest({ ok: false });
 			}
@@ -1013,13 +1148,20 @@ module.exports = {
 
 	// 删除 group 成员
 	'DELETE /api/group/deleteGroupMember': deleteGroupMember,
+	// 删除房间
+	'DELETE /api/group/deleteHouse': deleteHouse,
+
 	// 更新群信息
 	'PUT /api/group/updateGroupInfo': updateGroupInfo,
+	// 更新房间
+	'PUT /api/group/updateHouse': updateHouse,
 
 	// 获取群组
 	'GET /api/group/getGroupById': getGroupById,
 	// 获取群组信息
 	'GET /api/group/getGroupInfo': getGroupInfo,
+	// 获取设备 Id
+	'GET /api/group/getHouse': getHouse,
 	// 退出群组
 	'GET /api/group/exitGroup': exitGroup,
 	// 解散群组
