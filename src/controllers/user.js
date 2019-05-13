@@ -4,6 +4,7 @@ const UserRole = require('../models/UserRole');
 const UserGroup = require('../models/UserGroup');
 const House = require('../models/House');
 const VerificationCode = require('../models/VerificationCode');
+const TodoList = require('../models/TodoList');
 
 const sendEmail = require('../utils/email');
 const signHash = require('../utils/hash');
@@ -19,6 +20,7 @@ const imgUrlPath = require('../config/index').imgUrlPath;
 const imgUrl = require('../config/index').imgUrl;
 const path = require('path');
 const fs = require('fs');
+const uuid = require('uuid');
 
 // 邮件配置
 let mail = require('../config/index').mail;
@@ -381,6 +383,72 @@ const perfectInformation = async (ctx, next) => {
 		});
 };
 
+// 添加 to-dolist
+const setTodoList = async (ctx, next) => {
+	const [reqData = '', payload] = [
+		ctx.request.body,
+		jsonWebToken.getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError('user: to-dolist_unknown_error', `系统未知错误`);
+	}
+
+	const todoId = uuid.v1();
+	await new TodoList({
+		userId: payload.userId,
+		todoId: todoId,
+		todoType: reqData.todoType,
+		content: reqData.content,
+		time: reqData.time,
+		finish: false,
+	})
+		.save()
+		.then(docs => {
+			if (docs.todoId) {
+				ctx.rest({ ok: true });
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('sign: unknown_error', `系统未知错误`);
+		});
+};
+
+// delete
+// 删除 to-dolist
+const deleteTodoList = async (ctx, next) => {
+	const [reqData = '', payload] = [
+		ctx.request.body,
+		jsonWebToken.getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'group: delete_to-dolist_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await TodoList.deleteOne({
+		userId: payload.userId,
+		todoId: reqData.todoId,
+	})
+		.then(docs => {
+			if (docs.ok === 1) {
+				ctx.rest({
+					ok: true,
+				});
+			} else {
+				ctx.rest({
+					ok: false,
+				});
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('user: database_error', `系统未知错误`);
+		});
+};
+
 // put
 // 更新用户信息
 const updateUserInfo = async (ctx, next) => {
@@ -405,6 +473,77 @@ const updateUserInfo = async (ctx, next) => {
 			avatar: reqData.avatar,
 			sex: reqData.sex,
 			birthday: reqData.birthday,
+		},
+		{
+			new: true,
+		}
+	)
+		.then(docs => {
+			ctx.rest(docs);
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('user: database_error', `系统未知错误`);
+		});
+};
+
+// 更新 to-dolist
+const updateTodoList = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		jsonWebToken.getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'user: update_TodoList_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await TodoList.updateOne(
+		{
+			userId: payload.userId,
+			todoId: reqData.todoId,
+		},
+		{
+			todoType: reqData.todoType,
+			content: reqData.content,
+			time: reqData.time,
+		}
+	)
+		.then(docs => {
+			if (docs.ok) {
+				ctx.rest({ ok: true });
+			} else {
+				ctx.rest({ ok: false });
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('user: database_error', `系统未知错误`);
+		});
+};
+
+// 完成 to-dolist
+const finishTodoList = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		jsonWebToken.getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'user: finish_TodoList_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await TodoList.findOneAndUpdate(
+		{
+			userId: payload.userId,
+			todoId: reqData.todoId,
+		},
+		{
+			finish: true,
 		},
 		{
 			new: true,
@@ -583,6 +722,36 @@ const UserFind = query => {
 	]);
 };
 
+// TodoList
+const getTodoList = async (ctx, next) => {
+	const payload = jsonWebToken.getJWTPayload(ctx.headers.authorization);
+	if (!payload) {
+		throw new APIError('user: get_to-doList_unknown_error', `系统未知错误`);
+	}
+	const date = new Date();
+	const [start, end] = [
+		new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+		new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
+	];
+
+	await TodoList.find({
+		userId: payload.userId,
+		updateTime: { $gte: start, $lt: end },
+	})
+		.sort({ time: 1 })
+		.then(docs => {
+			if (docs.length) {
+				ctx.rest(docs);
+			} else {
+				ctx.rest([]);
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('user: database_error', `系统未知错误`);
+		});
+};
+
 module.exports = {
 	// 验证码
 	'POST /api/user/sendCode': sendCode,
@@ -594,9 +763,18 @@ module.exports = {
 	'POST /api/user/setUserAvatar': setUserAvatar,
 	// 完善信息
 	'POST /api/user/perfectInformation': perfectInformation,
+	// 添加 to-dolist
+	'POST /api/user/TodoList': setTodoList,
+
+	// 删除 to-dolist
+	'DELETE /api/user/TodoList': deleteTodoList,
 
 	// 更新用户信息
 	'PUT /api/user/updateUserInfo': updateUserInfo,
+	// 更新 to-dolist
+	'PUT /api/user/TodoList': updateTodoList,
+	// 完成 to-dolist
+	'PUT /api/user/finish/TodoList': finishTodoList,
 
 	// 登出
 	'GET /api/user/signOut': signOut,
@@ -608,4 +786,7 @@ module.exports = {
 	'GET /api/user/getUserById': getUserById,
 	// 获取 Token
 	'GET /api/user/getUserToken': getUserToken,
+
+	// 获取 To-do List
+	'GET /api/user/TodoList': getTodoList,
 };

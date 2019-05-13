@@ -6,6 +6,7 @@ const DeviceStatus = require('../models/DeviceStatus');
 const DeviceCategory = require('../models/DeviceCategory');
 const DeviceCategoryItem = require('../models/DeviceCategoryItem');
 const DeviceTimedTask = require('../models/DeviceTimedTask');
+const DeviceAssociate = require('../models/DeviceAssociate');
 
 const mqttClient = require('../middleware/mqttClient');
 const deviceHash = require('../utils/hash');
@@ -15,6 +16,7 @@ const APIError = require('../middleware/rest').APIError;
 const setDesiredLog = require('../utils/logKit').setDesiredLog;
 const getId = require('../utils/getId');
 const getMessageId = require('../utils/getMessageId');
+const uuid = require('uuid');
 
 // set
 // 添加设备
@@ -188,6 +190,47 @@ const setDeviceTimedTask = async (ctx, next) => {
 		console.log(error.message);
 		throw new APIError('device: database_error', `系统未知错误`);
 	}
+};
+
+// 设置关联设备
+const setDeviceAssociate = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: set_device_associate_unknown_error',
+			`系统未知错误`
+		);
+	}
+	const associateId = uuid.v1();
+	await new DeviceAssociate({
+		associateId: associateId, // 关联 ID
+		groupId: payload.groupId, // 群组 ID
+		deviceId: reqData.deviceId, // 设备 ID
+		condition: {
+			// 关联设备触发条件
+			id: reqData.condition.id,
+			value: reqData.condition.value,
+		},
+		// associatedDeviceId: String, // 关联设备 ID
+		// expect: {
+		// 	// 期望关联设备响应
+		// 	id: String,
+		// 	value: Mixed,
+		// },
+		notice: true, // 是否通知
+	})
+		.save()
+		.then(docs => {
+			console.log(docs);
+			ctx.rest(docs);
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
 };
 
 // put
@@ -390,6 +433,60 @@ const updateDeviceTimedTask = async (ctx, next) => {
 			console.log(error.message);
 			throw new APIError(
 				'device: update_device_timed_task_unknown_error',
+				'系统未知错误'
+			);
+		});
+};
+
+// 更新关联设备
+const updateDeviceAssociate = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_associate_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	let data = {};
+	// 1 触发条件; 2 期望响应
+	if (reqData.type === 1) {
+		data = {
+			deviceId: reqData.deviceId, // 设备 ID
+			condition: {
+				// 关联设备触发条件
+				id: reqData.condition.id,
+				value: reqData.condition.value,
+			},
+		};
+	} else if (reqData.type === 2) {
+		data = {
+			associatedDeviceId: reqData.associatedDeviceId, // 关联设备 ID
+			expect: {
+				// 期望关联设备响应
+				id: reqData.expect.id,
+				value: reqData.expect.value,
+			},
+		};
+	}
+	await DeviceAssociate.updateOne(
+		{
+			associateId: reqData.associateId,
+			groupId: payload.groupId,
+		},
+		data
+	)
+		.then(docs => {
+			console.log(docs);
+			ctx.rest({ ok: true });
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError(
+				'device: update_device_associate_unknown_error',
 				'系统未知错误'
 			);
 		});
@@ -746,6 +843,34 @@ const getDeviceTimedTaskById = async (ctx, next) => {
 			);
 		});
 };
+// 获取设备关联
+const getDeviceAssociate = async (ctx, next) => {
+	const [payload, reqData] = [
+		getJWTPayload(ctx.headers.authorization),
+		ctx.request.query,
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: get_device_associate_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await DeviceAssociate.find({
+		groupId: payload.groupId,
+	})
+		.then(docs => {
+			console.log(docs);
+			ctx.rest(docs);
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError(
+				'device: get_device_timed_task_by_id_unknown_error',
+				`系统未知错误`
+			);
+		});
+};
 
 // 获取设备 Id
 const getDeviceId = async (ctx, next) => {
@@ -781,6 +906,7 @@ const deviceParamAndAttr = query => {
 	]);
 };
 
+// 获取日志
 const getLogs = reqData => {
 	const date = new Date();
 	const [start, end] = [
@@ -804,6 +930,8 @@ module.exports = {
 	'POST /api/device/setDesired': setDesired,
 	// 设置定时任务
 	'POST /api/device/setDeviceTimedTask': setDeviceTimedTask,
+	// 设置关联设备
+	'POST /api/device/deviceAssociate': setDeviceAssociate,
 
 	// 更新设备参数
 	'PUT /api/device/updateDevice': updateDevice,
@@ -813,6 +941,8 @@ module.exports = {
 	'PUT /api/device/startDeviceTimedTask': startDeviceTimedTask,
 	// 重置定时任务
 	'PUT /api/device/updateDeviceTimedTask': updateDeviceTimedTask,
+	// 更新关联设备
+	'PUT /api/device/deviceAssociate': updateDeviceAssociate,
 
 	// 删除设备
 	'DELETE /api/device/deleteDevice': deleteDevice,
@@ -837,4 +967,6 @@ module.exports = {
 	'GET /api/device/getDeviceTimedTaskById': getDeviceTimedTaskById,
 	// 获取设备 Id
 	'GET /api/device/getDeviceId': getDeviceId,
+	// 获取设备关联
+	'GET /api/device/DeviceAssociate': getDeviceAssociate,
 };
