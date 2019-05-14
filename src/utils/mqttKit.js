@@ -1,6 +1,10 @@
 const DeviceStatus = require('../models/DeviceStatus');
+const DeviceAssociate = require('../models/DeviceAssociate');
 const setOnlineLog = require('../utils/logKit').setOnlineLog;
 const canclAllTimedTask = require('../utils/schedule').canclAllTimedTask;
+const mqttClient = require('../middleware/mqttClient');
+const setDesiredLog = require('../utils/logKit').setDesiredLog;
+const uuid = require('uuid');
 
 // 更新数据库
 const updateStatus = async (deviceId, payload) => {
@@ -12,7 +16,7 @@ const updateStatus = async (deviceId, payload) => {
 		data[`status.${el}`] = payload[el];
 	});
 
-	DeviceStatus.findOneAndUpdate(
+	await DeviceStatus.findOneAndUpdate(
 		{ deviceId: deviceId },
 		{ $set: data },
 		{
@@ -33,6 +37,7 @@ const updateStatus = async (deviceId, payload) => {
 		});
 };
 
+// 设置在线/离线状态
 const setOnline = (deviceId, onLine) => {
 	return DeviceStatus.findOneAndUpdate(
 		{ deviceId: deviceId },
@@ -65,10 +70,58 @@ const setOnline = (deviceId, onLine) => {
 		});
 };
 
+// 关联设备响应
+const setDeviceAssociate = async (deviceId, payload) => {
+	if (!deviceId || !payload) {
+		return;
+	}
+
+	const docs = await DeviceAssociate.find({
+		'condition.deviceId': deviceId,
+		open: true,
+	}).catch(error => {
+		console.log(error);
+	});
+
+	if (!docs.length) {
+		return;
+	}
+
+	for (const el of docs) {
+		if (!el.expect.deviceId) {
+			continue;
+		}
+		if (payload[el.condition.id] !== el.condition.value) {
+			continue;
+		}
+		const data = await DeviceStatus.findOne({
+			deviceId: el.expect.deviceId,
+		});
+		if (data.onLine) {
+			const desiredId = uuid.v1();
+			let desired = {};
+			desired[el.expect.id] = el.expect.value;
+			await Promise.all([
+				mqttClient.MQTTPublish(el.groupId, el.expect.deviceId, desired),
+				setDesiredLog({
+					logId: desiredId,
+					groupId: el.groupId,
+					deviceId: el.expect.deviceId,
+					source: 'DeviceAssociate',
+					logType: 'info',
+					desired: desired,
+				}),
+			]);
+		}
+	}
+};
+
 module.exports = {
 	// 更新 status
 	updateStatus: updateStatus,
 
 	// 设置在线状态
 	setOnline: setOnline,
+
+	setDeviceAssociate: setDeviceAssociate,
 };

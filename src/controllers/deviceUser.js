@@ -136,7 +136,7 @@ const setDesired = async (ctx, next) => {
 	}
 
 	try {
-		const desiredId = getId(15);
+		const desiredId = uuid.v1();
 		await Promise.all([
 			mqttClient.MQTTPublish(
 				payload.groupId,
@@ -208,24 +208,24 @@ const setDeviceAssociate = async (ctx, next) => {
 	await new DeviceAssociate({
 		associateId: associateId, // 关联 ID
 		groupId: payload.groupId, // 群组 ID
-		deviceId: reqData.deviceId, // 设备 ID
+		name: reqData.name,
 		condition: {
 			// 关联设备触发条件
+			deviceId: reqData.condition.deviceId, // 设备 ID
 			id: reqData.condition.id,
 			value: reqData.condition.value,
 		},
-		// associatedDeviceId: String, // 关联设备 ID
-		// expect: {
-		// 	// 期望关联设备响应
-		// 	id: String,
-		// 	value: Mixed,
-		// },
+		expect: {},
 		notice: true, // 是否通知
+		open: false,
 	})
 		.save()
 		.then(docs => {
-			console.log(docs);
-			ctx.rest(docs);
+			if (docs.associateId) {
+				ctx.rest({ ok: true });
+			} else {
+				ctx.rest({ ok: false });
+			}
 		})
 		.catch(error => {
 			console.log(error.message);
@@ -455,18 +455,20 @@ const updateDeviceAssociate = async (ctx, next) => {
 	// 1 触发条件; 2 期望响应
 	if (reqData.type === 1) {
 		data = {
-			deviceId: reqData.deviceId, // 设备 ID
+			name: reqData.name,
 			condition: {
 				// 关联设备触发条件
+				deviceId: reqData.condition.deviceId, // 设备 ID
 				id: reqData.condition.id,
 				value: reqData.condition.value,
 			},
 		};
 	} else if (reqData.type === 2) {
 		data = {
-			associatedDeviceId: reqData.associatedDeviceId, // 关联设备 ID
+			name: reqData.name,
 			expect: {
 				// 期望关联设备响应
+				deviceId: reqData.expect.deviceId, // 关联设备 ID
 				id: reqData.expect.id,
 				value: reqData.expect.value,
 			},
@@ -480,8 +482,45 @@ const updateDeviceAssociate = async (ctx, next) => {
 		data
 	)
 		.then(docs => {
-			console.log(docs);
-			ctx.rest({ ok: true });
+			if (docs.ok) {
+				ctx.rest({ ok: true });
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError(
+				'device: update_device_associate_unknown_error',
+				'系统未知错误'
+			);
+		});
+};
+
+// 开启关闭关联设备
+const openDeviceAssociate = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_associate_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await DeviceAssociate.updateOne(
+		{
+			associateId: reqData.associateId,
+			groupId: payload.groupId,
+		},
+		{
+			open: reqData.open,
+		}
+	)
+		.then(docs => {
+			if (docs.ok) {
+				ctx.rest({ ok: true });
+			}
 		})
 		.catch(error => {
 			console.log(error.message);
@@ -591,6 +630,30 @@ const deleteDeviceTimedTask = async (ctx, next) => {
 	])
 		.then(docs => {
 			if (docs[0].ok && docs[1]) {
+				ctx.rest({ ok: true });
+			} else {
+				ctx.rest({ ok: false });
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+};
+
+// 删除设备关联
+const deleteDeviceAssociate = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError(
+			'device: delete_deviceAssociate_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	await DeviceAssociate.deleteOne({ associateId: reqData.associateId })
+		.then(docs => {
+			if (docs.ok) {
 				ctx.rest({ ok: true });
 			} else {
 				ctx.rest({ ok: false });
@@ -860,7 +923,6 @@ const getDeviceAssociate = async (ctx, next) => {
 		groupId: payload.groupId,
 	})
 		.then(docs => {
-			console.log(docs);
 			ctx.rest(docs);
 		})
 		.catch(error => {
@@ -943,6 +1005,8 @@ module.exports = {
 	'PUT /api/device/updateDeviceTimedTask': updateDeviceTimedTask,
 	// 更新关联设备
 	'PUT /api/device/deviceAssociate': updateDeviceAssociate,
+	// 开启关闭关联设备
+	'PUT /api/device/open/deviceAssociate': openDeviceAssociate,
 
 	// 删除设备
 	'DELETE /api/device/deleteDevice': deleteDevice,
@@ -950,6 +1014,8 @@ module.exports = {
 	'DELETE /api/device/deleteDeviceLog': deleteDeviceLog,
 	// 删除定时任务
 	'DELETE /api/device/deleteDeviceTimedTask': deleteDeviceTimedTask,
+	// 删除设备关联
+	'DELETE /api/device/deviceAssociate': deleteDeviceAssociate,
 
 	// 获取设备参数与属性
 	'GET /api/device/getDeviceParamAndAttrById': getDeviceParamAndAttrById,
@@ -968,5 +1034,5 @@ module.exports = {
 	// 获取设备 Id
 	'GET /api/device/getDeviceId': getDeviceId,
 	// 获取设备关联
-	'GET /api/device/DeviceAssociate': getDeviceAssociate,
+	'GET /api/device/deviceAssociate': getDeviceAssociate,
 };

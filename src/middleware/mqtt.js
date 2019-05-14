@@ -29,13 +29,16 @@ const mqttserver = () => {
 	});
 
 	// pub
-	server.on('published', (packet, client) => {
+	server.on('published', async (packet, client) => {
 		try {
 			console.log(`  --> published : ${packet.payload}`);
 
 			if (packet.topic.startsWith('device/status/')) {
 				const payload = JSON.parse(packet.payload.toString());
-				mqttKit.updateStatus(client.id, payload.reported);
+				await Promise.all([
+					mqttKit.updateStatus(client.id, payload.reported),
+					mqttKit.setDeviceAssociate(client.id, payload.reported),
+				]);
 			}
 		} catch (error) {
 			console.log(`MQTT: ${error}`);
