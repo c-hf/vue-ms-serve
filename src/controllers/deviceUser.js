@@ -7,15 +7,17 @@ const DeviceCategory = require('../models/DeviceCategory');
 const DeviceCategoryItem = require('../models/DeviceCategoryItem');
 const DeviceTimedTask = require('../models/DeviceTimedTask');
 const DeviceAssociate = require('../models/DeviceAssociate');
+const Mode = require('../models/Mode');
+const ModeTask = require('../models/ModeTask');
 
 const mqttClient = require('../middleware/mqttClient');
 const deviceHash = require('../utils/hash');
+const modeKit = require('../utils/modeKit');
 const schedule = require('../utils/schedule');
 const getJWTPayload = require('../utils/jsonWebToken').getJWTPayload;
 const APIError = require('../middleware/rest').APIError;
 const setDesiredLog = require('../utils/logKit').setDesiredLog;
 const getId = require('../utils/getId');
-const getMessageId = require('../utils/getMessageId');
 const uuid = require('uuid');
 
 // set
@@ -159,6 +161,39 @@ const setDesired = async (ctx, next) => {
 	}
 };
 
+// 操作多个设备
+const setManyDesired = async (ctx, next) => {
+	const [payload, reqData] = [
+		getJWTPayload(ctx.headers.authorization),
+		ctx.request.body,
+	];
+	if (!reqData) {
+		throw new APIError('device: set_desired_unknown_error', `系统未知错误`);
+	}
+
+	try {
+		const desiredId = getId(15);
+		for (let i of reqData) {
+			await Promise.all([
+				mqttClient.MQTTPublish(payload.groupId, i.id, i.action),
+				setDesiredLog({
+					logId: desiredId,
+					groupId: payload.groupId,
+					deviceId: i.id,
+					source: 'Voice',
+					logType: 'info',
+					desired: i.action,
+				}),
+			]);
+		}
+
+		ctx.rest({ information: '设备操作完成' });
+	} catch (error) {
+		console.log(error.message);
+		throw new APIError('device: database_error', `系统未知错误`);
+	}
+};
+
 // 设置定时任务
 const setDeviceTimedTask = async (ctx, next) => {
 	const [reqData, payload] = [
@@ -231,6 +266,94 @@ const setDeviceAssociate = async (ctx, next) => {
 			console.log(error.message);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
+};
+
+// 设置情景模式
+const setMode = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError('device: set_mode_unknown_error', `系统未知错误`);
+	}
+	const modeId = uuid.v1();
+	await new Mode({
+		modeId: modeId,
+		groupId: payload.groupId,
+		name: reqData.name, // 名称
+		content: [], // timedTaskId
+		timeType: reqData.timeType, // 0 不定时 1 执行一次 2 每周执行
+		time: reqData.time, // 定时时间
+		date: reqData.date,
+		switch: false,
+		perform: false, // 是否执行
+		finish: false, // 是否完成
+	})
+		.save()
+		.then(docs => {
+			if (docs.modeId) {
+				ctx.rest({ ok: true });
+			} else {
+				ctx.rest({ ok: false });
+			}
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+};
+
+// 设置情景模式任务
+const setModeTask = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: set_mode_task_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	const taskId = uuid.v1();
+	const docs = await Promise.all([
+		new ModeTask({
+			taskId: taskId,
+			deviceId: reqData.deviceId,
+			categoryItemId: reqData.categoryItemId,
+			desired: reqData.desired,
+			time: reqData.time, // 定时时间
+		}).save(),
+		Mode.findOneAndUpdate(
+			{
+				modeId: reqData.modeId,
+			},
+			{
+				$push: {
+					content: {
+						taskId: taskId,
+					},
+				},
+			},
+			{
+				new: true,
+			}
+		),
+	]).catch(error => {
+		console.log(error.message);
+		throw new APIError('device: database_error', `系统未知错误`);
+	});
+	if (!docs[0].taskId) {
+		ctx.rest({ ok: false });
+		return;
+	}
+	await modeKit.canclMode(docs[1].modeId);
+	if (docs[1].switch) {
+		await modeKit.startMode(docs[1]);
+	}
+	ctx.rest({ ok: true });
 };
 
 // put
@@ -531,6 +654,140 @@ const openDeviceAssociate = async (ctx, next) => {
 		});
 };
 
+// 更新情景模式
+// 'PUT /api/device/mode': updateMode,
+const updateMode = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_associate_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	const docs = await Mode.findOneAndUpdate(
+		{
+			modeId: reqData.modeId,
+		},
+		{
+			name: reqData.name,
+			timeType: reqData.timeType,
+			time: reqData.time,
+			date: reqData.date,
+		},
+		{
+			new: true,
+		}
+	).catch(error => {
+		console.log(error.message);
+		throw new APIError(
+			'device: update_device_associate_unknown_error',
+			'系统未知错误'
+		);
+	});
+	if (!docs.modeId) {
+		ctx.rest({ ok: false });
+		return;
+	}
+	await modeKit.canclMode(docs.modeId);
+	if (docs.switch) {
+		await modeKit.startMode(docs);
+	}
+	ctx.rest({ ok: true });
+};
+
+// 更新情景模式任务
+const updateModeTask = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_associate_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	const docs = await Promise.all([
+		ModeTask.updateOne(
+			{
+				taskId: reqData.taskId,
+			},
+			{
+				deviceId: reqData.deviceId,
+				desired: reqData.desired,
+				time: reqData.time, // 定时时间
+			},
+			{
+				new: true,
+			}
+		),
+		Mode.findOne({
+			modeId: reqData.modeId,
+		}),
+	]).catch(error => {
+		console.log(error.message);
+		throw new APIError(
+			'device: update_device_associate_unknown_error',
+			'系统未知错误'
+		);
+	});
+
+	if (!docs[0].ok) {
+		ctx.rest({ ok: false });
+		return;
+	}
+
+	await modeKit.canclMode(docs[1].modeId);
+	if (docs[1].switch) {
+		await modeKit.startMode(docs[1]);
+	}
+	ctx.rest({ ok: true });
+};
+
+// 开启关闭情景模式
+const updateModeSwitch = async (ctx, next) => {
+	const [reqData, payload] = [
+		ctx.request.body,
+		getJWTPayload(ctx.headers.authorization),
+	];
+	if (!reqData) {
+		throw new APIError(
+			'device: update_device_associate_unknown_error',
+			`系统未知错误`
+		);
+	}
+
+	const docs = await Mode.findOneAndUpdate(
+		{
+			modeId: reqData.modeId,
+		},
+		{
+			switch: reqData.switch, // 是否开启
+		},
+		{
+			new: true,
+		}
+	).catch(error => {
+		console.log(error.message);
+		throw new APIError(
+			'device: update_device_associate_unknown_error',
+			'系统未知错误'
+		);
+	});
+
+	if (docs.switch) {
+		await modeKit.startMode(docs);
+	} else {
+		await modeKit.canclMode(docs.modeId);
+	}
+	ctx.rest({ ok: true });
+};
+
 // delete
 // 删除设备
 const deleteDevice = async (ctx, next) => {
@@ -663,6 +920,72 @@ const deleteDeviceAssociate = async (ctx, next) => {
 			console.log(error.message);
 			throw new APIError('device: database_error', `系统未知错误`);
 		});
+};
+
+// 删除情景模式
+const deleteMode = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError('device: delete_mode_unknown_error', `系统未知错误`);
+	}
+
+	const modeDocs = await Mode.findOne({
+		modeId: reqData.modeId,
+	}).catch(error => {
+		console.log(error.message);
+		throw new APIError('device: database_error', `系统未知错误`);
+	});
+	for (const el of modeDocs.content) {
+		await ModeTask.deleteOne({ taskId: el.taskId }).catch(error => {
+			console.log(error.message);
+			throw new APIError('device: database_error', `系统未知错误`);
+		});
+	}
+
+	const docs = await Mode.deleteOne({ modeId: reqData.modeId }).catch(
+		error => {
+			console.log(error.message);
+			throw new APIError('device: database_error', `系统未知错误`);
+		}
+	);
+	if (docs.ok) {
+		await modeKit.canclMode(reqData.modeId);
+		ctx.rest({ ok: true });
+	} else {
+		ctx.rest({ ok: false });
+	}
+};
+
+// 删除情景模式任务
+const deleteModeTask = async (ctx, next) => {
+	const reqData = ctx.request.query;
+	if (!reqData) {
+		throw new APIError('device: delete_mode_unknown_error', `系统未知错误`);
+	}
+
+	const docs = await Promise.all([
+		Mode.findOneAndUpdate(
+			{ modeId: reqData.modeId },
+			{ $pull: { content: { taskId: reqData.taskId } } },
+			{ new: true }
+		),
+		ModeTask.deleteOne({ taskId: reqData.taskId }),
+	]).catch(error => {
+		console.log(error.message);
+		throw new APIError('device: database_error', `系统未知错误`);
+	});
+
+	if (docs[1].ok) {
+		await modeKit.canclMode(docs[0].modeId);
+		if (docs[0].content.length < 1 && docs[0].switch) {
+			await Mode.updateOne({ modeId: reqData.modeId }, { switch: false });
+		} else if (docs[0].switch) {
+			await modeKit.startMode(docs[0]);
+		}
+		ctx.rest({ ok: true });
+	} else {
+		ctx.rest({ ok: false });
+	}
 };
 
 // get
@@ -934,6 +1257,45 @@ const getDeviceAssociate = async (ctx, next) => {
 		});
 };
 
+// 获取情景模式
+const getMode = async (ctx, next) => {
+	const [payload] = [getJWTPayload(ctx.headers.authorization)];
+	if (!payload) {
+		throw new APIError('device: get_mode_unknown_error', `系统未知错误`);
+	}
+	await Mode.aggregate([
+		{
+			$match: { groupId: payload.groupId },
+		},
+		{
+			$lookup: {
+				from: 'modeTasks',
+				localField: 'content.taskId',
+				foreignField: 'taskId',
+				as: 'modeTasks',
+			},
+		},
+		{
+			$project: {
+				_id: 0,
+				__v: 0,
+				'modeTasks._id': 0,
+				'modeTasks.__v': 0,
+			},
+		},
+	])
+		.then(docs => {
+			ctx.rest(docs);
+		})
+		.catch(error => {
+			console.log(error.message);
+			throw new APIError(
+				'device: get_mode_unknown_error',
+				`系统未知错误`
+			);
+		});
+};
+
 // 获取设备 Id
 const getDeviceId = async (ctx, next) => {
 	const payload = getJWTPayload(ctx.headers.authorization);
@@ -990,10 +1352,16 @@ module.exports = {
 	'POST /api/device/setDevice': setDevice,
 	// 操作设备
 	'POST /api/device/setDesired': setDesired,
+	// 操作多个设备
+	'POST /api/device/setManyDesired': setManyDesired,
 	// 设置定时任务
 	'POST /api/device/setDeviceTimedTask': setDeviceTimedTask,
 	// 设置关联设备
 	'POST /api/device/deviceAssociate': setDeviceAssociate,
+	// 设置情景模式
+	'POST /api/device/mode': setMode,
+	// 设置情景模式任务
+	'POST /api/device/mode/task': setModeTask,
 
 	// 更新设备参数
 	'PUT /api/device/updateDevice': updateDevice,
@@ -1007,6 +1375,12 @@ module.exports = {
 	'PUT /api/device/deviceAssociate': updateDeviceAssociate,
 	// 开启关闭关联设备
 	'PUT /api/device/open/deviceAssociate': openDeviceAssociate,
+	// 更新情景模式
+	'PUT /api/device/mode': updateMode,
+	// 更新情景模式任务
+	'PUT /api/device/mode/task': updateModeTask,
+	// 开启关闭情景模式
+	'PUT /api/device/mode/switch': updateModeSwitch,
 
 	// 删除设备
 	'DELETE /api/device/deleteDevice': deleteDevice,
@@ -1016,6 +1390,10 @@ module.exports = {
 	'DELETE /api/device/deleteDeviceTimedTask': deleteDeviceTimedTask,
 	// 删除设备关联
 	'DELETE /api/device/deviceAssociate': deleteDeviceAssociate,
+	// 删除情景模式
+	'DELETE /api/device/mode': deleteMode,
+	// 删除情景模式任务
+	'DELETE /api/device/mode/task': deleteModeTask,
 
 	// 获取设备参数与属性
 	'GET /api/device/getDeviceParamAndAttrById': getDeviceParamAndAttrById,
@@ -1035,4 +1413,6 @@ module.exports = {
 	'GET /api/device/getDeviceId': getDeviceId,
 	// 获取设备关联
 	'GET /api/device/deviceAssociate': getDeviceAssociate,
+	// 获取情景模式
+	'GET /api/device/mode': getMode,
 };

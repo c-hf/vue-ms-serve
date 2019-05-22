@@ -902,7 +902,7 @@ const getGroupById = async (ctx, next) => {
 	await UserGroup.aggregate([
 		{
 			$lookup: {
-				from: 'usersInfo',
+				from: 'userInfo',
 				localField: 'member.userId',
 				foreignField: 'userId',
 				as: 'members',

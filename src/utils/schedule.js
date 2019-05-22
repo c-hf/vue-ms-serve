@@ -2,8 +2,8 @@ const schedule = require('node-schedule');
 const DeviceTimedTask = require('../models/DeviceTimedTask');
 
 const setDesiredLog = require('../utils/logKit').setDesiredLog;
-const getId = require('../utils/getId');
 const mqttClient = require('../middleware/mqttClient');
+const uuid = require('uuid');
 const schedulesMap = new Map();
 
 // let task = schedule.scheduleJob('42 * * * *', () => {
@@ -25,7 +25,7 @@ const timedTask = (date, data) => {
 			timedTaskId: data.timedTaskId,
 			finish: true,
 		});
-		const desiredId = getId(15);
+		const desiredId = uuid.v1();
 		setDesiredLog({
 			logId: desiredId,
 			groupId: data.groupId,
@@ -36,7 +36,7 @@ const timedTask = (date, data) => {
 		});
 	});
 	if (schedulesMap.has(data.timedTaskId)) {
-		schedulesMap.delete(timedTaskId);
+		schedulesMap.delete(data.timedTaskId);
 	}
 	schedulesMap.set(data.timedTaskId, timedTask);
 };

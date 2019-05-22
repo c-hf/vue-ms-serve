@@ -576,7 +576,7 @@ const getUserAvatar = async (ctx, next) => {
 	await User.aggregate([
 		{
 			$lookup: {
-				from: 'usersInfo',
+				from: 'userInfo',
 				localField: 'userId',
 				foreignField: 'userId',
 				as: 'userInfo',
@@ -707,9 +707,9 @@ const UserFind = query => {
 		{
 			// 左连接
 			$lookup: {
-				from: 'usersInfo', // 关联到 usersInfo 表
+				from: 'userInfo', // 关联到 userInfo 表
 				localField: 'userId', // User 表关联的字段
-				foreignField: 'userId', // usersInfo 表关联的字段
+				foreignField: 'userId', // userInfo 表关联的字段
 				as: 'userInfo', // 分组名
 			},
 		},

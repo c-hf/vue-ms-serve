@@ -128,7 +128,7 @@ const UserFind = query => {
 		},
 		{
 			$lookup: {
-				from: 'usersInfo',
+				from: 'userInfo',
 				localField: 'userId',
 				foreignField: 'userId',
 				as: 'userInfo',
