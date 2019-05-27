@@ -91,9 +91,24 @@ const setDeviceAssociate = async (deviceId, payload) => {
 		if (!el.expect.deviceId) {
 			continue;
 		}
-		if (payload[el.condition.id] !== el.condition.value) {
+		if (el.condition.judge !== undefined) {
+			if (el.condition.judge === 1) {
+				if (payload[el.condition.id] <= el.condition.value) {
+					continue;
+				}
+			} else if (el.condition.judge === 2) {
+				if (payload[el.condition.id] >= el.condition.value) {
+					continue;
+				}
+			} else if (el.condition.judge === 3) {
+				if (payload[el.condition.id] !== el.condition.value) {
+					continue;
+				}
+			}
+		} else if (payload[el.condition.id] !== el.condition.value) {
 			continue;
 		}
+
 		const data = await DeviceStatus.findOne({
 			deviceId: el.expect.deviceId,
 		});

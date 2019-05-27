@@ -1,5 +1,6 @@
 const DeviceLog = require('../models/DeviceLog');
 const logKeyWord = require('../config/index').logKeyWord;
+const logDesiredWord = require('../config/index').logDesiredWord;
 
 const setLog = data => {
 	new DeviceLog({
@@ -33,7 +34,7 @@ module.exports = {
 		Object.keys(data.desired).forEach(key => {
 			if (logKeyWord[key]) {
 				data.message = `${data.message} ${logKeyWord[key]}${
-					logKeyWord[data.desired[key]]
+					logDesiredWord[key][data.desired[key]]
 				}`;
 			}
 		});

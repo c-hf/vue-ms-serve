@@ -239,17 +239,21 @@ const setDeviceAssociate = async (ctx, next) => {
 			`系统未知错误`
 		);
 	}
+	let condition = {
+		// 关联设备触发条件
+		deviceId: reqData.condition.deviceId, // 设备 ID
+		id: reqData.condition.id,
+		value: reqData.condition.value,
+	};
+	if (reqData.condition.judge !== undefined) {
+		condition.judge = reqData.condition.judge;
+	}
 	const associateId = uuid.v1();
 	await new DeviceAssociate({
 		associateId: associateId, // 关联 ID
 		groupId: payload.groupId, // 群组 ID
 		name: reqData.name,
-		condition: {
-			// 关联设备触发条件
-			deviceId: reqData.condition.deviceId, // 设备 ID
-			id: reqData.condition.id,
-			value: reqData.condition.value,
-		},
+		condition: condition,
 		expect: {},
 		notice: true, // 是否通知
 		open: false,
@@ -586,6 +590,10 @@ const updateDeviceAssociate = async (ctx, next) => {
 				value: reqData.condition.value,
 			},
 		};
+
+		if (reqData.condition.judge !== undefined) {
+			data.condition.judge = reqData.condition.judge;
+		}
 	} else if (reqData.type === 2) {
 		data = {
 			name: reqData.name,

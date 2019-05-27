@@ -10,6 +10,7 @@ const deviceAssociateSchema = new Schema({
 		// 关联设备触发条件
 		deviceId: String, // 设备 ID
 		id: String,
+		judge: Number,
 		value: Schema.Types.Mixed,
 	},
 	expect: {
