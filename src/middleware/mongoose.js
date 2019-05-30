@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 module.exports = {
 	init: () => {
-		mongoose.connect(
-			'mongodb://localhost:27017/koa',
-			{ useNewUrlParser: true, useFindAndModify: false }
-		);
+		mongoose.connect('mongodb://localhost:27017/koa', {
+			useNewUrlParser: true,
+			useFindAndModify: false,
+		});
 
 		mongoose.connection.on(
 			'error',

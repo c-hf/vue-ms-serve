@@ -6,7 +6,7 @@ const settings = {
 	http: {
 		port: 8000,
 		bundle: true,
-		static: './mqtt/',
+		// static: './mqtt/',
 	},
 };
 
