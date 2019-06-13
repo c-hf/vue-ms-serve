@@ -1,0 +1,44 @@
+const MaximumMatching = require("../segmentation/MaximumMatching");
+const MinimumMatching = require("../segmentation/MinimumMatching");
+const ReverseMaximumMatching = require("../segmentation/ReverseMaximumMatching");
+const ReverseMinimumMatching = require("../segmentation/ReverseMinimumMatching");
+const BidirectionalMaximumMatching = require("../segmentation/BidirectionalMaximumMatching");
+const BidirectionalMinimumMatching = require("../segmentation/BidirectionalMinimumMatching");
+const BidirectionalMaximumMinimumMatching = require("./BidirectionalMaximumMinimumMatching");
+const Bigram = require("../corpus/model/bigram/bigram");
+const segmention = text => {
+    let map = new Map();
+    let result1 = MaximumMatching(text);
+    let result2 = ReverseMaximumMatching(text);
+    let result3 = MinimumMatching(text);
+    let result4 = ReverseMinimumMatching(text);
+    let result5 = BidirectionalMaximumMatching(text);
+    let result6 = BidirectionalMinimumMatching(text);
+    let result7 = BidirectionalMaximumMinimumMatching(text);
+    let bigram = new Bigram();
+    bigram.loadAndWatch();
+    let score1 = bigram.calculateBigram(result1);
+    let score2 = bigram.calculateBigram(result2);
+    let score3 = bigram.calculateBigram(result3);
+    let score4 = bigram.calculateBigram(result4);
+    let score5 = bigram.calculateBigram(result5);
+    let score6 = bigram.calculateBigram(result6);
+    let score7 = bigram.calculateBigram(result7);
+    console.log(result1);
+    console.log(result2);
+    console.log(result3);
+    console.log(result4);
+    console.log(result5);
+    console.log(result6);
+    console.log(result7);
+
+    console.log("正向最大匹配算法得分:       ", score1);
+    console.log("逆向最大匹配算法得分:       ", score2);
+    console.log("正向最小匹配算法得分:       ", score3);
+    console.log("逆向最小匹配算法得分:       ", score4);
+    console.log("双向最大匹配算法得分:       ", score5);
+    console.log("双向最小匹配算法得分:       ", score6);
+    console.log("双向最大最小匹配算法得分:       ", score7);
+};
+
+module.exports = segmention;

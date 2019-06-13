@@ -3,6 +3,7 @@ const User = require('../models/User');
 const UserInfo = require('../models/UserInfo');
 const OAuth = require('../models/OAuth');
 
+const mqttClient = require('../middleware/mqttClient');
 const APIError = require('../middleware/rest').APIError;
 const signHash = require('../utils/hash');
 const jsonWebToken = require('../utils/jsonWebToken');
@@ -28,13 +29,24 @@ const weChatAuthorize = async (ctx, next) => {
 		throw new APIError('weChat: wrong_spassword', `密码错误`);
 	}
 
+	// 获取openid
 	let resData = await getOpenId(reqData.code).catch(error => {
 		console.log(error);
 		throw new APIError('weChat: unknown_error', `系统未知错误`);
 	});
 	resData = JSON.parse(resData);
+	if (!resData.openid) {
+		ctx.rest({ ok: false });
+		return;
+	}
 
-	new OAuth({
+	// 查看是否已授权
+	const OAuthData = await OAuth.findOne({ userId: docs[0].userId });
+	if (OAuthData) {
+		throw new APIError('weChat: unknown_error', `账号已授权`);
+	}
+
+	await new OAuth({
 		userId: docs[0].userId,
 		oauthName: 'weChat',
 		oauthId: resData.openid,
@@ -143,10 +155,31 @@ const UserFind = query => {
 	]);
 };
 
+//小车控制
+const carCtrl = async (ctx, next) => {
+	const reqData = ctx.request.body;
+	try {
+		await Promise.all([
+			mqttClient.MQTTPublish(
+				reqData.groupId,
+				reqData.deviceId,
+				reqData.desired
+			),
+		]);
+		ctx.rest({ ok: true });
+	} catch (error) {
+		console.log(error.message);
+		throw new APIError('device: database_error', `系统未知错误`);
+	}
+};
+
 module.exports = {
 	// 微信登录
 	'GET /api/user/weChatSignIn': weChatSignIn,
 
 	// 授权关联
 	'POST /api/user/weChatAuthorize': weChatAuthorize,
+
+	//小车控制
+	'POST /api/user/carCtrl': carCtrl,
 };

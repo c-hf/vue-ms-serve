@@ -4,6 +4,8 @@ const jwtKoa = require('koa-jwt'); // koa-jwt
 const logger = require('koa-logger'); // log
 const static = require('koa-static'); // 静态资源服务
 const koaBody = require('koa-body'); // koa-body 使用ctx.body解析中间件
+const fs = require('fs');
+const { Path } = require('./src/middleware/utils/Path');
 
 // controller
 const controller = require('./src/middleware/controller');
@@ -21,6 +23,8 @@ const wss = require('./src/middleware/websocketServer');
 const jwtSecret = require('./src/config/index').jwtSecret;
 // 静态资源的路径
 const staticPath = require('./src/config/index').staticPath;
+//分词字典路径
+const data = fs.readFileSync(Path.CoreDictionaryPath, 'utf8');
 
 const app = new Koa();
 
@@ -122,3 +126,19 @@ global.io = require('socket.io')(server);
 
 // wss
 wss.init(server);
+
+//初始化分词字典
+const ConstructingDictionary = () => {
+	let maxlength = 0;
+	let result = data.split('\n'); //把字符串转化成数组
+	global.dictionary = new Set(result);
+	for (let item of global.dictionary.keys()) {
+		if (maxlength < item.length) {
+			maxlength = item.length;
+		}
+	}
+	global.MAX_LENGTH = maxlength;
+	console.log('加载分词字典词最大长度:' + maxlength);
+	console.log('加载字典数据' + result.length + '行');
+};
+ConstructingDictionary();

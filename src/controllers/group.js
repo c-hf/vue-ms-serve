@@ -232,8 +232,6 @@ const applyMembershipMsg = async (ctx, next) => {
 		]);
 		await messageNotify(ownerId, message);
 
-		console.log(docs);
-
 		ctx.rest({
 			ok: true,
 		});
@@ -325,7 +323,7 @@ const addGroupMemberHandle = async (ctx, next) => {
 			new Message(message).save(),
 			new MessageRelation(relation).save(),
 		]);
-		console.log(docs);
+
 		await messageNotify(reqData.sourceId, message);
 		ctx.rest({
 			ok: true,

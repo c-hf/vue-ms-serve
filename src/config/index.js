@@ -4,7 +4,7 @@ module.exports = {
 	reIssueTime: 30 * 60, // 重新签发时间
 	staticPath: '/src/assets', // 静态资源路径
 	imgUrlPath: '/src/assets/static/avatar',
-	imgUrl: 'http://localhost:3000/static/avatar/',
+	imgUrl: 'http://118.24.169.3/v1/static/avatar/',
 
 	nodemailer: {
 		host: 'smtp.qq.com',

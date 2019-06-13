@@ -594,7 +594,7 @@ const getUserAvatar = async (ctx, next) => {
 			throw new APIError('sign: database_error', `系统未知错误`);
 		})
 		.then(docs => {
-			console.log(docs);
+			// console.log(docs);
 			if (!docs[0]) {
 				throw new APIError(
 					'sign: account_not_registered',
